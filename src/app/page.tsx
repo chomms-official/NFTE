@@ -1,3 +1,5 @@
+"use client";
+
 import { FrameSequenceHero, type FrameSequenceStep } from "@/components/ui/mac-book-neo-hero";
 
 const FRAME_COUNT = 100;
