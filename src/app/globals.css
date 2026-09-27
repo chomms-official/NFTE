@@ -1,0 +1,392 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Mac Book Neo Hero CSS Custom Implementation */
+.fsh-root {
+  position: relative;
+  width: 100%;
+  background: #f7f5f2; /* Warm nature color matching Chomm's house */
+  color: #333;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.fsh-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #f7f5f2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s ease-out;
+}
+
+.fsh-loader-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fsh-loader-text {
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  color: #6d665b;
+}
+
+.fsh-loader-track {
+  width: 200px;
+  height: 2px;
+  background: #e0dcd3;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.fsh-loader-fill {
+  display: block;
+  height: 100%;
+  background: #8b7d6b;
+  transition: width 0.2s ease;
+}
+
+.fsh-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 3rem;
+  transition: all 0.3s ease;
+}
+
+.fsh-nav-scrolled {
+  background: rgba(247, 245, 242, 0.85);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+  padding: 1rem 3rem;
+}
+
+.fsh-brand {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #4a4135;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fsh-brand-dot {
+  width: 8px;
+  height: 8px;
+  background: #7ca856;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.fsh-nav-links {
+  display: none;
+}
+@media (min-width: 768px) {
+  .fsh-nav-links {
+    display: flex;
+    gap: 2rem;
+  }
+}
+
+.fsh-nav-links a {
+  font-size: 0.9rem;
+  color: #6d665b;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.fsh-nav-links a:hover {
+  color: #333;
+}
+
+.fsh-cta {
+  background: #4a4135;
+  color: white;
+  padding: 0.5rem 1.25rem;
+  border-radius: 20px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+.fsh-cta:hover {
+  background: #332d24;
+}
+
+.fsh-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fsh-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.fsh-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (min-width: 768px) {
+  .fsh-canvas {
+    object-fit: contain;
+    padding: 2rem;
+  }
+}
+
+.fsh-copy {
+  position: absolute;
+  top: 10%;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.fsh-title {
+  font-size: clamp(3rem, 6vw, 5rem);
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -1px;
+}
+
+.fsh-title-dark {
+  color: #333;
+}
+.fsh-title-rainbow {
+  background: linear-gradient(90deg, #7ca856, #b8860b, #4a4135);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.fsh-sub {
+  font-size: 1.25rem;
+  color: #6d665b;
+  margin-top: 0.5rem;
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+.fsh-sub-hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.fsh-cards {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1rem;
+  z-index: 20;
+  width: 90%;
+  max-width: 1200px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fsh-card {
+  flex: 1;
+  min-width: 220px;
+  max-width: 280px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  padding: 1.5rem;
+  opacity: 0.4;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+  transform: translateY(20px);
+}
+
+.fsh-card-active {
+  opacity: 1;
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+}
+
+.fsh-card-prev {
+  opacity: 0.7;
+  transform: translateY(10px);
+}
+
+.fsh-card-inner {
+  position: relative;
+}
+
+.fsh-card-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #8b7d6b;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.fsh-card-title {
+  font-size: 1.15rem;
+  margin-bottom: 0.5rem;
+  color: var(--c, #333);
+  font-weight: 700;
+}
+
+.fsh-card-desc {
+  font-size: 0.85rem;
+  color: #6d665b;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+  min-height: 3.5rem;
+}
+
+.fsh-card-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fsh-ticks {
+  display: flex;
+  gap: 4px;
+}
+
+.fsh-tick {
+  flex: 1;
+  height: 3px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fsh-tick span {
+  display: block;
+  height: 100%;
+  background: var(--c, #333);
+  transform-origin: left;
+}
+
+.fsh-card-label {
+  font-size: 0.75rem;
+  color: #8b7d6b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fsh-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(0,0,0,0.05);
+  z-index: 50;
+}
+
+.fsh-progress-fill {
+  display: block;
+  height: 100%;
+  background: #7ca856;
+}
+
+@keyframes fsh-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
