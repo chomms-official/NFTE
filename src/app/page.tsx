@@ -1,11 +1,11 @@
 "use client";
 
-import CinematicScrollHero from "@/components/ui/cinematic-scroll-hero";
+import InteractiveProductJourney from "@/components/ui/interactive-product-journey";
 
 export default function Home() {
   return (
-    <main className="bg-white min-h-screen">
-      <CinematicScrollHero />
+    <main className="bg-[#f3eee7] min-h-screen">
+      <InteractiveProductJourney />
     </main>
   );
 }
