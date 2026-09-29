@@ -1,11 +1,11 @@
 "use client";
 
-import InteractiveProductJourney from "@/components/ui/interactive-product-journey";
+import { HorizonHeroSection } from "@/components/ui/horizon-hero-section";
 
 export default function Home() {
   return (
-    <main className="bg-[#f3eee7] min-h-screen">
-      <InteractiveProductJourney />
+    <main className="bg-black min-h-screen">
+      <HorizonHeroSection />
     </main>
   );
 }
