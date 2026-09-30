@@ -2,58 +2,57 @@
 
 import { FrameSequenceHero, type FrameSequenceStep } from "@/components/ui/mac-book-neo-hero";
 
-const FRAME_COUNT = 941;
-const framePath = (i: number) =>
-  `https://raw.githubusercontent.com/duthiljean/hero-apple/main/frames/frame_${String(i).padStart(4, "0")}.jpg`;
+const FRAME_COUNT = 5;
+const framePath = (i: number) => `/product-frames/frame_${Math.min(Math.max(i - 1, 0), 4)}.jpg`;
 
 const steps: FrameSequenceStep[] = [
-  { from: 0.02, to: 0.28, color: "#ff9f3a", num: "01", total: "04", icon: "✦",
-    title: "Five vivid colors.",
-    description: "Bright yellow, soft pink, deep blue, silver, and midnight. Pick the one that's you.",
-    label: "Colors" },
-  { from: 0.28, to: 0.55, color: "#ff6f9c", num: "02", total: "04", icon: "◐",
-    title: "A refined silhouette.",
-    description: "11.3 mm thin, 1.24 kg light. The most portable MacBook ever built.",
-    label: "Design" },
-  { from: 0.55, to: 0.82, color: "#5e9bff", num: "03", total: "04", icon: "▣",
-    title: "A display that captivates.",
-    description: "Liquid Retina XDR, 1,000 nits sustained. ProMotion 120 Hz for silky-smooth motion.",
-    label: "Display" },
-  { from: 0.82, to: 1.01, color: "#a37bff", num: "04", total: "04", icon: "⌁",
-    title: "Built to last all day.",
-    description: "Up to 22 hours of battery life. Whisper-quiet, wherever you go.",
-    label: "Battery" },
+  { from: 0.0, to: 0.25, color: "#926839", num: "01", total: "04", icon: "🌿",
+    title: "Natural Essential Oils.",
+    description: "Tangerine, Kaffir Lime, Eucalyptus, and Cedarwood. Refreshing and natural.",
+    label: "Ingredients" },
+  { from: 0.25, to: 0.5, color: "#6a7b3b", num: "02", total: "04", icon: "🌱",
+    title: "DEET Free & Skin Friendly.",
+    description: "Safe for you and your family. Crafted with care and nature in mind.",
+    label: "Safe" },
+  { from: 0.5, to: 0.75, color: "#d28e53", num: "03", total: "04", icon: "⏱",
+    title: "4+ Hours Protection.",
+    description: "Long-lasting mosquito repellent film. Surround yourself with a protective scent.",
+    label: "Duration" },
+  { from: 0.75, to: 1.01, color: "#4f3824", num: "04", total: "04", icon: "💧",
+    title: "Eco-Friendly & Easy to use.",
+    description: "Dissolve 1 film in 50ml of water. Shake well and spray on desired area.",
+    label: "Usage" },
 ];
 
 export default function Home() {
   return (
-    <main className="bg-white min-h-screen">
+    <main className="bg-[#f1e5d7] min-h-screen">
       <FrameSequenceHero
         frameCount={FRAME_COUNT}
         framePath={framePath}
-        eagerCount={140}
-        scrollHeight="600vh"
+        eagerCount={5}
+        scrollHeight="400vh"
         brand={
           <>
-            <span className="fsh-brand-dot" />
-            neo.
+            <span className="fsh-brand-dot" style={{background: '#926839'}} />
+            NFTE
           </>
         }
         navLinks={[
           { label: "Overview", href: "#" },
-          { label: "Specs", href: "#" },
-          { label: "Colors", href: "#" },
-          { label: "Support", href: "#" },
+          { label: "Ingredients", href: "#" },
+          { label: "How to Use", href: "#" },
+          { label: "Buy", href: "#" },
         ]}
-        ctaLabel="Buy"
+        ctaLabel="Order Now"
         ctaHref="#"
         title={
           <>
-            <span className="fsh-title-dark text-black font-bold">MacBook</span>{" "}
-            <span className="fsh-title-rainbow text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-pink-400 to-blue-400 font-bold">Neo</span>
+            <span className="fsh-title-dark text-amber-900 font-bold">Chomm's</span>{" "}
+            <span className="fsh-title-rainbow text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-600 font-bold">House</span>
           </>
         }
-        subtitle="Scroll to explore."
+        subtitle="Mosquito Repellent Film"
         steps={steps}
       />
     </main>
