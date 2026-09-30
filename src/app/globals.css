@@ -31,14 +31,14 @@
 }
 
 /* Chomm's House Hero Styles */
-.fsh-root {
+.ch-root {
   position: relative;
   width: 100%;
   background: #fbf9f6;
   color: #3e3a35;
 }
 
-.fsh-loader {
+.ch-loader {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -50,11 +50,11 @@
   gap: 1.5rem;
   transition: opacity 0.8s ease, visibility 0.8s ease;
 }
-.fsh-loader-done {
+.ch-loader-done {
   opacity: 0;
   visibility: hidden;
 }
-.fsh-loader-text {
+.ch-loader-text {
   font-size: 1rem;
   font-weight: 300;
   color: #6e685f;
@@ -62,20 +62,28 @@
   line-height: 1.6;
   letter-spacing: 0.05em;
 }
-.fsh-loader-track {
+.ch-loader-track {
   width: 150px;
   height: 1px;
   background: #e6e0d8;
   overflow: hidden;
 }
-.fsh-loader-fill {
+.ch-loader-fill {
   display: block;
   height: 100%;
   background: #8B633E;
   transition: width 0.1s linear;
 }
 
-.fsh-nav {
+.ch-loader-mode {
+  font-size: 0.75rem;
+  font-family: system-ui, sans-serif;
+  color: #a49e95;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.ch-nav {
   position: fixed;
   top: 0;
   left: 0;
@@ -89,24 +97,24 @@
   background: transparent;
   transition: all 0.5s ease;
 }
-.fsh-nav-scrolled {
+.ch-nav-scrolled {
   background: rgba(251, 249, 246, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(139, 99, 62, 0.1);
 }
-.fsh-brand {
+.ch-brand {
   font-weight: 600;
   font-size: 1.25rem;
 }
-.fsh-nav-links {
+.ch-nav-links {
   display: none;
 }
 @media (min-width: 768px) {
-  .fsh-nav-links {
+  .ch-nav-links {
     display: flex;
     gap: 2.5rem;
   }
-  .fsh-nav-links a {
+  .ch-nav-links a {
     color: #6e685f;
     text-decoration: none;
     font-size: 0.85rem;
@@ -115,11 +123,11 @@
     text-transform: uppercase;
     transition: color 0.3s ease;
   }
-  .fsh-nav-links a:hover {
+  .ch-nav-links a:hover {
     color: #3e3a35;
   }
 }
-.fsh-cta {
+.ch-cta {
   background: #3e3a35;
   color: #fbf9f6;
   padding: 0.6rem 1.5rem;
@@ -131,11 +139,11 @@
   text-transform: uppercase;
   transition: background 0.3s ease;
 }
-.fsh-cta:hover {
+.ch-cta:hover {
   background: #8B633E;
 }
 
-.fsh-stage {
+.ch-stage {
   position: sticky;
   top: 0;
   width: 100%;
@@ -147,7 +155,7 @@
   justify-content: center;
 }
 
-.fsh-canvas-wrap {
+.ch-canvas-wrap {
   position: absolute;
   inset: 0;
   display: flex;
@@ -156,25 +164,58 @@
   z-index: 10;
   background: transparent;
 }
-.fsh-canvas {
+.ch-canvas {
   max-width: 90vw;
   max-height: 50vh;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 10px 30px rgba(139, 99, 62, 0.08);
   margin-bottom: 5vh;
+}
+.ch-fallback-primary {
+  position: absolute;
+  z-index: 11;
   transition: opacity 0.5s ease;
 }
+.ch-fallback-secondary {
+  position: absolute;
+  z-index: 12;
+  transition: opacity 0.3s linear;
+}
+.ch-fallback-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 13;
+  pointer-events: none;
+  box-shadow: inset 0 0 100px rgba(251, 249, 246, 0.5);
+  border-radius: 8px;
+}
 
-.fsh-copy {
+.ch-copy {
   position: absolute;
   top: 20%;
   z-index: 20;
   text-align: center;
   pointer-events: none;
 }
+.ch-title {
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin: 0;
+}
+.ch-sub {
+  font-size: 1.25rem;
+  color: #666;
+  margin-top: 1rem;
+  transition: opacity 0.3s;
+}
+.ch-sub-hidden {
+  opacity: 0;
+}
 
-.fsh-cards {
+.ch-card-wrap {
   position: absolute;
   bottom: 8%;
   left: 50%;
@@ -184,7 +225,7 @@
   z-index: 30;
   pointer-events: none;
 }
-.fsh-card {
+.ch-card {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -193,15 +234,15 @@
   transform: translateY(15px);
   transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.fsh-card-active {
+.ch-card-active {
   opacity: 1;
   transform: translateY(0);
 }
-.fsh-card-prev {
+.ch-card-prev {
   opacity: 0;
   transform: translateY(-15px);
 }
-.fsh-card-inner {
+.ch-card-inner {
   background: rgba(255, 253, 250, 0.95);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(139, 99, 62, 0.15);
@@ -209,60 +250,60 @@
   padding: 2rem;
   box-shadow: 0 12px 40px rgba(139, 99, 62, 0.08);
 }
-.fsh-card-head {
+.ch-card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.2rem;
 }
-.fsh-card-num {
+.ch-card-num {
   font-size: 0.85rem;
   font-family: system-ui, -apple-system, sans-serif;
   letter-spacing: 0.1em;
   color: #a49e95;
 }
-.fsh-card-num strong {
+.ch-card-num strong {
   color: var(--c);
 }
-.fsh-card-icon {
+.ch-card-icon {
   color: var(--c);
 }
-.fsh-card-title {
+.ch-card-title {
   font-size: 1.4rem;
   font-weight: 400;
   margin: 0 0 0.8rem 0;
   color: #3e3a35;
 }
-.fsh-card-desc {
+.ch-card-desc {
   font-size: 0.95rem;
   color: #6e685f;
   margin: 0 0 1.8rem 0;
   line-height: 1.6;
   font-family: system-ui, -apple-system, sans-serif;
 }
-.fsh-card-foot {
+.ch-card-foot {
   display: flex;
   align-items: center;
   gap: 1.2rem;
 }
-.fsh-ticks {
+.ch-ticks {
   display: flex;
   gap: 4px;
   flex: 1;
 }
-.fsh-tick {
+.ch-tick {
   height: 2px;
   flex: 1;
   background: #e6e0d8;
   overflow: hidden;
 }
-.fsh-tick span {
+.ch-tick span {
   display: block;
   height: 100%;
   background: var(--c);
   transform-origin: left;
 }
-.fsh-card-label {
+.ch-card-label {
   font-size: 0.7rem;
   font-family: system-ui, -apple-system, sans-serif;
   font-weight: 500;
@@ -271,7 +312,7 @@
   letter-spacing: 0.1em;
 }
 
-.fsh-progress {
+.ch-progress {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -280,9 +321,27 @@
   background: rgba(139, 99, 62, 0.1);
   z-index: 50;
 }
-.fsh-progress-fill {
+.ch-progress-fill {
   display: block;
   height: 100%;
   background: #8B633E;
   transform-origin: left;
+}
+
+.ch-step-badge {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: #a49e95;
+  letter-spacing: 0.2em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ch-step-badge i {
+  width: 30px;
+  height: 1px;
+  background: #e6e0d8;
 }

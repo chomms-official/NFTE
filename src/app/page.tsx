@@ -11,10 +11,19 @@ const FRAME_COUNT = 900;
 const framePath = (i: number) =>
   `/frames/chomms-house/frame_${String(i).padStart(4, "0")}.jpg`;
 
-// Fallback logic: mapping the 11 steps to the 10 storyboard images we cropped earlier
-// Since step 1 and step 2 in the prompt are both "pouch/open", we map both to step_0.jpg
-const fallbackMapping = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-const fallbackPath = (stepIdx: number) => `/storyboard/step_${fallbackMapping[stepIdx]}.jpg`;
+const fallbackFrames = [
+  "/storyboard/step_0.jpg", // 01 Hero
+  "/storyboard/step_0.jpg", // 02 Open
+  "/storyboard/step_1.jpg", // 03 Remove Film
+  "/storyboard/step_2.jpg", // 04 Prepare Water
+  "/storyboard/step_3.jpg", // 05 Dissolve
+  "/storyboard/step_4.jpg", // 06 Mix
+  "/storyboard/step_5.jpg", // 07 Fill
+  "/storyboard/step_6.jpg", // 08 Close
+  "/storyboard/step_7.jpg", // 09 Shake
+  "/storyboard/step_8.jpg", // 10 Spray
+  "/storyboard/step_9.jpg", // 11 Lifestyle
+];
 
 const steps: FrameSequenceStep[] = [
   {
@@ -146,7 +155,7 @@ export default function Home() {
       <FrameSequenceHero
         frameCount={FRAME_COUNT}
         framePath={framePath}
-        fallbackPath={fallbackPath}
+        fallbackFrames={fallbackFrames}
         eagerCount={100}
         scrollHeight="1100vh"
         brand={
