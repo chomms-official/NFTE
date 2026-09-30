@@ -345,3 +345,22 @@
   height: 1px;
   background: #e6e0d8;
 }
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .ch-card-wrap {
+    top: auto;
+    bottom: 5%;
+  }
+  .ch-card {
+    top: auto;
+    bottom: 0;
+  }
+  .ch-copy {
+    top: 3%;
+    left: 5%;
+  }
+  .ch-title {
+    font-size: clamp(1.5rem, 6vw, 2rem);
+  }
+}
