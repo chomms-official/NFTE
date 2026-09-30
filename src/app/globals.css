@@ -166,10 +166,11 @@
 }
 .ch-canvas {
   max-width: 90vw;
-  max-height: 50vh;
+  max-height: 45vh;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 10px 30px rgba(139, 99, 62, 0.08);
+  margin-top: 15vh;
   margin-bottom: 5vh;
 }
 .ch-fallback-primary {
@@ -193,13 +194,14 @@
 
 .ch-copy {
   position: absolute;
-  top: 20%;
+  top: 12%;
   z-index: 20;
   text-align: center;
   pointer-events: none;
+  width: 100%;
 }
 .ch-title {
-  font-size: clamp(3rem, 8vw, 6rem);
+  font-size: clamp(2.5rem, 6vw, 5rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.1;
