@@ -12,9 +12,6 @@ export type FrameSequenceStep = {
 };
 
 export type ChommsHouseHeroProps = {
-  frameCount: number;
-  framePath: (i: number) => string;
-  fallbackFrames: string[];
   scrollHeight?: string;
   brand?: React.ReactNode;
   navLinks?: { label: string; href: string }[];
@@ -279,7 +276,6 @@ function Scene({ progress }: { progress: number }) {
 // --- Main UI Component ---
 
 export function ChommsHouse3DHero({
-  frameCount, framePath, fallbackFrames,
   scrollHeight = "1100vh", brand, navLinks = [], ctaLabel,
   ctaHref = "#", title, subtitle, steps, className,
 }: ChommsHouseHeroProps) {
