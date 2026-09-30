@@ -1,6 +1,6 @@
 "use client";
 
-import { FrameSequenceHero, type FrameSequenceStep } from "@/components/ui/chomms-house-frame-sequence";
+import { ChommsHouse3DHero, type FrameSequenceStep } from "@/components/ui/chomms-house-3d-hero";
 import { 
   Sparkles, PackageOpen, Layers, GlassWater, 
   Droplets, RotateCw, ArrowDownRight, CircleCheck, 
@@ -152,7 +152,7 @@ const steps: FrameSequenceStep[] = [
 export default function Home() {
   return (
     <main className="bg-[#fbf9f6] min-h-screen font-serif text-[#3e3a35]">
-      <FrameSequenceHero
+      <ChommsHouse3DHero
         frameCount={FRAME_COUNT}
         framePath={framePath}
         fallbackFrames={fallbackFrames}
