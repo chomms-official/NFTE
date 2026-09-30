@@ -18,6 +18,7 @@ export type FrameSequenceStep = {
 export type FrameSequenceHeroProps = {
   frameCount: number;
   framePath: (i: number) => string;
+  fallbackPath?: (stepIdx: number) => string;
   eagerCount?: number;
   scrollHeight?: string;
   brand?: React.ReactNode;
@@ -25,7 +26,7 @@ export type FrameSequenceHeroProps = {
   ctaLabel?: string;
   ctaHref?: string;
   title: React.ReactNode;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   steps: FrameSequenceStep[];
   className?: string;
 };
@@ -36,8 +37,9 @@ const cx = (...c: (string | false | null | undefined)[]) =>
 export function FrameSequenceHero({
   frameCount,
   framePath,
-  eagerCount = 140,
-  scrollHeight = "600vh",
+  fallbackPath,
+  eagerCount = 100,
+  scrollHeight = "1100vh",
   brand,
   navLinks = [],
   ctaLabel,
@@ -64,6 +66,7 @@ export function FrameSequenceHero({
   const [progress, setProgress] = useState(0);
   const [stepLocal, setStepLocal] = useState(0);
   const [currentSrc, setCurrentSrc] = useState<string>(() => framePath(1));
+  const [framesExist, setFramesExist] = useState(true);
 
   const showFrame = (i: number) => {
     if (i === lastShownRef.current) return;
@@ -88,6 +91,7 @@ export function FrameSequenceHero({
 
   useEffect(() => {
     const eager = Math.min(eagerCount, frameCount);
+    let framesFailed = 0;
     const loadOne = (i: number) => {
       const img = new Image();
       img.decoding = "async";
@@ -102,7 +106,11 @@ export function FrameSequenceHero({
         }
       };
       img.onload = onSettle;
-      img.onerror = onSettle;
+      img.onerror = () => {
+        framesFailed++;
+        if (framesFailed > 5) setFramesExist(false);
+        onSettle();
+      };
       cacheRef.current[i] = img;
     };
     for (let i = 0; i < eager; i++) loadOne(i);
@@ -144,11 +152,20 @@ export function FrameSequenceHero({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps, frameCount]);
 
+  const displaySrc = (!framesExist && fallbackPath) ? fallbackPath(Math.max(0, activeIdx)) : currentSrc;
+
   return (
     <div className={cx("fsh-root", className)}>
       <div aria-hidden className={cx("fsh-loader", loaderDone && "fsh-loader-done")}>
         <div className="fsh-loader-text">
-          {loadPct < 100 ? `Loading · ${loadPct}%` : "Ready"}
+          {loadPct < 100 ? (
+            <>
+              Preparing your journey<br />
+              <span className="opacity-50 text-sm">{loadPct}%</span>
+            </>
+          ) : (
+            "Your Chomm’s House experience is ready."
+          )}
         </div>
         <div className="fsh-loader-track">
           <span className="fsh-loader-fill" style={{ width: `${loadPct}%` }} />
@@ -169,12 +186,12 @@ export function FrameSequenceHero({
         )}
       </nav>
 
-      {/* Pinned stage — always full viewport */}
+      {/* Pinned stage */}
       <div className="fsh-stage">
         <div className="fsh-canvas-wrap">
           <img
-            src={currentSrc}
-            alt=""
+            src={displaySrc}
+            alt="Chomm's House Mosquito Repellent Film Presentation"
             className="fsh-canvas"
             draggable={false}
           />
@@ -183,7 +200,7 @@ export function FrameSequenceHero({
         <div className="fsh-copy">
           <h1 className="fsh-title">{title}</h1>
           {subtitle && (
-            <p className={cx("fsh-sub", subHidden && "fsh-sub-hidden")}>{subtitle}</p>
+            <div className={cx("fsh-sub", subHidden && "fsh-sub-hidden")}>{subtitle}</div>
           )}
         </div>
 
@@ -202,13 +219,12 @@ export function FrameSequenceHero({
                 )}
               >
                 <div className="fsh-card-inner">
-                  <span aria-hidden className="fsh-card-glow" />
                   <div className="fsh-card-head">
                     <span className="fsh-card-num">
                       <strong>{s.num}</strong> / {s.total}
                     </span>
                     <span aria-hidden className="fsh-card-icon">
-                      {s.icon ?? "✦"}
+                      {s.icon}
                     </span>
                   </div>
                   <h3 className="fsh-card-title">{s.title}</h3>
@@ -243,7 +259,6 @@ export function FrameSequenceHero({
         </div>
       </div>
 
-      {/* Empty scroll spacer: gives the page its scroll distance */}
       <div ref={spacerRef} className="fsh-spacer" style={{ height: scrollHeight }} />
     </div>
   );
