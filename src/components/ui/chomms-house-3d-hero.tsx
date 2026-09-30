@@ -336,14 +336,6 @@ export function ChommsHouse3DHero({
         </div>
       </div>
 
-      <nav className="ch-nav">
-        <div className="ch-brand">{brand}</div>
-        <div className="ch-nav-links">
-          {navLinks.map((l) => <a key={l.label} href={l.href}>{l.label}</a>)}
-        </div>
-        {ctaLabel && <a className="ch-cta" href={ctaHref}>{ctaLabel}</a>}
-      </nav>
-
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
           <Canvas shadows dpr={[1, 2]}>

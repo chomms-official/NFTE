@@ -191,14 +191,14 @@
 
 .ch-copy {
   position: absolute;
-  top: 12%;
-  z-index: 20;
-  text-align: center;
+  top: 5%;
+  left: 5%;
+  z-index: 50;
+  text-align: left;
   pointer-events: none;
-  width: 100%;
 }
 .ch-title {
-  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.1;
@@ -220,7 +220,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
-  max-width: 420px;
+  max-width: 320px;
   z-index: 30;
   pointer-events: none;
 }
@@ -232,6 +232,7 @@
   opacity: 0;
   transform: translateY(15px);
   transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: auto;
 }
 .ch-card-active {
   opacity: 1;
@@ -242,11 +243,11 @@
   transform: translateY(-15px);
 }
 .ch-card-inner {
-  background: rgba(255, 253, 250, 0.95);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 253, 250, 0.6);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(139, 99, 62, 0.15);
   border-radius: 8px;
-  padding: 2rem;
+  padding: 1.5rem;
   box-shadow: 0 12px 40px rgba(139, 99, 62, 0.08);
 }
 .ch-card-head {
@@ -268,16 +269,16 @@
   color: var(--c);
 }
 .ch-card-title {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 400;
-  margin: 0 0 0.8rem 0;
+  margin: 0 0 0.6rem 0;
   color: #3e3a35;
 }
 .ch-card-desc {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #6e685f;
-  margin: 0 0 1.8rem 0;
-  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
   font-family: system-ui, -apple-system, sans-serif;
 }
 .ch-card-foot {
