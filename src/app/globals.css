@@ -216,7 +216,7 @@
 
 .ch-card-wrap {
   position: absolute;
-  bottom: 8%;
+  top: 6%;
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
@@ -226,7 +226,7 @@
 }
 .ch-card {
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
   width: 100%;
   opacity: 0;
