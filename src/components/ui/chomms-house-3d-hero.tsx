@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles } from "@react-three/drei";
+import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, AccumulativeShadows, RandomizedLight } from "@react-three/drei";
 import * as THREE from "three";
 
 export type FrameSequenceStep = {
@@ -34,35 +34,46 @@ function mapRange(val: number, inMin: number, inMax: number, outMin: number, out
 
 // --- 3D Scene Components ---
 
-function Pouch({ progress }: { progress: number }) {
+function ProceduralMaterials() {
+  // Generate a noisy bump map for Kraft paper and Citrus
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    for (let x = 0; x < 512; x++) {
+      for (let y = 0; y < 512; y++) {
+        const v = Math.random() * 255;
+        ctx.fillStyle = 'rgb(' + Math.round(v) + ',' + Math.round(v) + ',' + Math.round(v) + ')';
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  const noiseTex = new THREE.CanvasTexture(canvas);
+  noiseTex.wrapS = THREE.RepeatWrapping;
+  noiseTex.wrapT = THREE.RepeatWrapping;
+  return noiseTex;
+}
+
+function Pouch({ progress, noiseTex }: { progress: number, noiseTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
   
   useFrame(() => {
     if (!ref.current) return;
-    
-    // Scene 01: Hero
     if (progress < 0.055) {
       ref.current.position.set(0, 0, 0);
       ref.current.rotation.set(0, mapRange(progress, 0, 0.055, 0, 0.1), 0);
       ref.current.scale.setScalar(1.2);
-    } 
-    // Scene 02: Open
-    else if (progress < 0.145) {
+    } else if (progress < 0.145) {
       ref.current.position.set(0, mapRange(progress, 0.055, 0.145, 0, -1), mapRange(progress, 0.055, 0.145, 0, 1.5));
       ref.current.rotation.set(mapRange(progress, 0.055, 0.145, 0, -0.2), 0.1, 0);
-    }
-    // Scene 03: Film
-    else if (progress < 0.235) {
+    } else if (progress < 0.235) {
       ref.current.position.set(0, -1, 1.5);
       ref.current.rotation.set(-0.2, 0.1, 0);
       ref.current.scale.setScalar(mapRange(progress, 0.145, 0.235, 1.2, 0.8));
-    }
-    // Scene 04-10: Hide
-    else if (progress < 0.9) {
+    } else if (progress < 0.9) {
       ref.current.position.set(0, -10, 0);
-    }
-    // Scene 11: Final Hero
-    else {
+    } else {
       ref.current.position.set(-1.2, 0.2, -0.5);
       ref.current.rotation.set(0, 0.3, 0);
       ref.current.scale.setScalar(1);
@@ -71,9 +82,18 @@ function Pouch({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[1.5, 2.2, 0.1]} />
-        <meshStandardMaterial color="#8B633E" roughness={0.9} />
+      <RoundedBox args={[1.5, 2.2, 0.12]} radius={0.05} smoothness={4} castShadow receiveShadow>
+        <meshStandardMaterial 
+          color="#a37b56" 
+          roughness={0.95} 
+          bumpMap={noiseTex} 
+          bumpScale={0.002}
+        />
+      </RoundedBox>
+      {/* Front Label */}
+      <mesh position={[0, 0, 0.065]} receiveShadow>
+        <planeGeometry args={[1.2, 1.6]} />
+        <meshStandardMaterial color="#fdfbf7" roughness={0.8} />
       </mesh>
     </group>
   );
@@ -85,78 +105,93 @@ function Film({ progress }: { progress: number }) {
 
   useFrame(() => {
     if (!ref.current || !matRef.current) return;
-    
-    // Scene 01-02: Hidden inside pouch
     if (progress < 0.145) {
       ref.current.position.set(0, 0.5, 1.5);
       matRef.current.opacity = 0;
-    }
-    // Scene 03: Remove Film
-    else if (progress < 0.235) {
+    } else if (progress < 0.235) {
       matRef.current.opacity = 0.9;
       ref.current.position.set(0, mapRange(progress, 0.145, 0.235, 0.5, 1.5), mapRange(progress, 0.145, 0.235, 1.5, 2.5));
       ref.current.rotation.set(mapRange(progress, 0.145, 0.235, 0, -0.5), 0, 0);
-    }
-    // Scene 04: Above water
-    else if (progress < 0.325) {
+    } else if (progress < 0.325) {
       ref.current.position.set(0, 2, 0);
       ref.current.rotation.set(-0.5, 0, 0);
       matRef.current.opacity = 0.9;
-    }
-    // Scene 05: Dissolve
-    else if (progress < 0.425) {
+    } else if (progress < 0.425) {
       ref.current.position.set(0, mapRange(progress, 0.325, 0.425, 2, 0), 0);
       matRef.current.opacity = mapRange(progress, 0.325, 0.425, 0.9, 0);
-    }
-    // Scene 06+: Dissolved
-    else {
+    } else {
       matRef.current.opacity = 0;
     }
   });
 
   return (
     <mesh ref={ref} castShadow>
-      <planeGeometry args={[1, 1.4, 8, 8]} />
-      <meshPhysicalMaterial ref={matRef} color="#F3EDE4" transmission={0.5} roughness={0.2} transparent side={THREE.DoubleSide} />
+      <planeGeometry args={[1, 1.4, 16, 16]} />
+      <meshPhysicalMaterial 
+        ref={matRef} 
+        color="#F3EDE4" 
+        transmission={0.8} 
+        roughness={0.2} 
+        thickness={0.01}
+        transparent 
+        side={THREE.DoubleSide} 
+      />
     </mesh>
   );
 }
 
 function Glass({ progress }: { progress: number }) {
   const ref = useRef<THREE.Group>(null);
+  const waterRef = useRef<THREE.MeshPhysicalMaterial>(null);
   
   useFrame(() => {
-    if (!ref.current) return;
-    // Hidden until Scene 04
+    if (!ref.current || !waterRef.current) return;
     if (progress < 0.235) {
       ref.current.position.set(0, -10, 0);
-    }
-    // Scene 04-06: Center stage
-    else if (progress < 0.515) {
+    } else if (progress < 0.515) {
       ref.current.position.set(0, 0, 0);
       ref.current.rotation.set(0, progress * Math.PI, 0);
-    }
-    // Scene 07: Pouring
-    else if (progress < 0.635) {
+      waterRef.current.color.setHex(0xcde3d6); // normal water
+    } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 0, -2), mapRange(progress, 0.515, 0.635, 0, 1.5), 0);
       ref.current.rotation.z = mapRange(progress, 0.515, 0.635, 0, -Math.PI / 2.5);
-    }
-    // Scene 08+: Hide
-    else {
+    } else {
       ref.current.position.set(0, -10, 0);
+    }
+    
+    // Dissolve color change
+    if (progress >= 0.325 && progress < 0.515) {
+      const dissolve = mapRange(progress, 0.325, 0.515, 0, 1);
+      waterRef.current.color.lerpColors(new THREE.Color(0xcde3d6), new THREE.Color(0x9cb8a5), dissolve);
     }
   });
 
   return (
     <group ref={ref}>
       <mesh castShadow receiveShadow position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.7, 0.6, 1.8, 32]} />
-        <meshPhysicalMaterial color="#ffffff" transmission={1} roughness={0.05} ior={1.5} transparent opacity={0.6} side={THREE.DoubleSide} />
+        <cylinderGeometry args={[0.7, 0.6, 1.8, 64]} />
+        <meshPhysicalMaterial 
+          color="#ffffff" 
+          transmission={1} 
+          roughness={0.02} 
+          ior={1.52} 
+          thickness={0.1}
+          transparent 
+          side={THREE.DoubleSide} 
+        />
       </mesh>
-      {/* Water volume */}
-      <mesh position={[0, -0.2, 0]}>
-        <cylinderGeometry args={[0.65, 0.55, 1.3, 32]} />
-        <meshPhysicalMaterial color="#cde3d6" transmission={0.9} roughness={0.1} transparent opacity={0.8} />
+      <mesh position={[0, -0.1, 0]}>
+        <cylinderGeometry args={[0.67, 0.57, 1.5, 64]} />
+        <meshPhysicalMaterial 
+          ref={waterRef}
+          color="#cde3d6" 
+          transmission={0.95} 
+          roughness={0.1} 
+          ior={1.33}
+          attenuationColor="#a9c9b5"
+          attenuationDistance={2}
+          transparent 
+        />
       </mesh>
     </group>
   );
@@ -168,34 +203,22 @@ function Bottle({ progress }: { progress: number }) {
   
   useFrame(() => {
     if (!ref.current || !pumpRef.current) return;
-    
-    // Scene 01-06: Hidden
     if (progress < 0.425) {
       ref.current.position.set(10, -10, 0);
-    }
-    // Scene 07: Transfer
-    else if (progress < 0.635) {
+    } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 3, 0), 0, 0);
       ref.current.rotation.set(0, 0, 0);
       pumpRef.current.position.y = 3;
-    }
-    // Scene 08: Close
-    else if (progress < 0.715) {
+    } else if (progress < 0.715) {
       ref.current.position.set(0, 0, 0);
       pumpRef.current.position.y = mapRange(progress, 0.635, 0.715, 3, 0);
-    }
-    // Scene 09: Shake
-    else if (progress < 0.805) {
+    } else if (progress < 0.805) {
       ref.current.position.set(mapRange(progress, 0.715, 0.805, 0, 0.5), mapRange(progress, 0.715, 0.805, 0, 0.5), 0);
       ref.current.rotation.z = Math.sin(progress * 150) * 0.15;
-    }
-    // Scene 10: Spray
-    else if (progress < 0.915) {
+    } else if (progress < 0.915) {
       ref.current.position.set(0.5, 0.5, 0);
       ref.current.rotation.z = 0;
-    }
-    // Scene 11: Final
-    else {
+    } else {
       ref.current.position.set(1.2, 0, 0.5);
       ref.current.rotation.set(0, -0.2, 0);
     }
@@ -203,21 +226,73 @@ function Bottle({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
+      {/* Bottle Body */}
       <mesh castShadow receiveShadow position={[0, -0.6, 0]}>
-        <cylinderGeometry args={[0.5, 0.5, 1.4, 32]} />
-        <meshPhysicalMaterial color="#ffffff" transmission={0.9} roughness={0.2} ior={1.5} />
+        <cylinderGeometry args={[0.6, 0.6, 1.4, 64]} />
+        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} clearcoatRoughness={0.1} />
+      </mesh>
+      {/* Bottle Shoulder */}
+      <mesh castShadow receiveShadow position={[0, 0.1, 0]}>
+        <sphereGeometry args={[0.6, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} />
       </mesh>
       
+      {/* Pump Assembly */}
       <group ref={pumpRef} position={[0, 0, 0]}>
-        <mesh castShadow receiveShadow position={[0, 0.3, 0]}>
-          <cylinderGeometry args={[0.15, 0.15, 0.4, 16]} />
-          <meshStandardMaterial color="#eeeeee" roughness={0.5} />
+        {/* Neck */}
+        <mesh castShadow receiveShadow position={[0, 0.8, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.3, 32]} />
+          <meshStandardMaterial color="#dddddd" roughness={0.4} metalness={0.8} />
         </mesh>
-        <mesh castShadow receiveShadow position={[0.2, 0.4, 0]} rotation={[0, 0, -Math.PI/2]}>
-          <cylinderGeometry args={[0.08, 0.08, 0.3, 16]} />
-          <meshStandardMaterial color="#dddddd" roughness={0.4} />
+        {/* Actuator Base */}
+        <mesh castShadow receiveShadow position={[0, 1.05, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.2, 32]} />
+          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        </mesh>
+        {/* Actuator Head */}
+        <mesh castShadow receiveShadow position={[0, 1.25, 0]}>
+          <cylinderGeometry args={[0.18, 0.18, 0.3, 32]} />
+          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        </mesh>
+        {/* Nozzle */}
+        <mesh castShadow receiveShadow position={[0.25, 1.25, 0]} rotation={[0, 0, -Math.PI/2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.3, 32]} />
+          <meshStandardMaterial color="#e0e0e0" roughness={0.4} />
         </mesh>
       </group>
+    </group>
+  );
+}
+
+function Botanicals({ progress, noiseTex }: { progress: number, noiseTex: THREE.Texture | null }) {
+  const ref = useRef<THREE.Group>(null);
+  
+  useFrame(() => {
+    if (!ref.current) return;
+    if (progress < 0.9) {
+      ref.current.position.set(0, -10, 0);
+    } else {
+      ref.current.position.set(0, -1.8, 0);
+    }
+  });
+
+  return (
+    <group ref={ref}>
+      {/* Tangerine */}
+      <mesh castShadow receiveShadow position={[-2, 0.4, 1]}>
+        <sphereGeometry args={[0.4, 32, 32]} />
+        <meshStandardMaterial color="#e87c31" roughness={0.7} bumpMap={noiseTex} bumpScale={0.01} />
+      </mesh>
+      {/* Kaffir Lime */}
+      <mesh castShadow receiveShadow position={[-1.2, 0.3, 1.8]}>
+        <sphereGeometry args={[0.3, 32, 32]} />
+        <meshStandardMaterial color="#4a633a" roughness={0.8} bumpMap={noiseTex} bumpScale={0.02} />
+      </mesh>
+      {/* Cedarwood Stick */}
+      <mesh castShadow receiveShadow position={[2, 0.1, 1]} rotation={[Math.PI/2, 0.2, 0.5]}>
+        <cylinderGeometry args={[0.1, 0.1, 1.5, 16]} />
+        <meshStandardMaterial color="#5c4033" roughness={1} bumpMap={noiseTex} bumpScale={0.05} />
+      </mesh>
     </group>
   );
 }
@@ -227,48 +302,77 @@ function ParticlesAndMist({ progress }: { progress: number }) {
   
   useFrame(() => {
     if (mistRef.current) {
-      // Scene 10: Spray Mist
       mistRef.current.visible = (progress >= 0.805 && progress < 0.915);
       if (mistRef.current.visible) {
-        mistRef.current.position.x = 0.5 + Math.random() * 0.1;
+        mistRef.current.position.x = 1.0 + Math.random() * 0.1;
       }
     }
   });
 
   return (
     <>
-      <Sparkles count={50} scale={5} size={2} speed={0.4} opacity={0.2} color="#8FA798" />
-      <group ref={mistRef} position={[1, 1, 0]}>
-        <Sparkles count={200} scale={[3, 1, 1]} size={4} speed={2} opacity={0.5} color="#ffffff" />
+      <Sparkles count={80} scale={6} size={1.5} speed={0.2} opacity={0.3} color="#ffffff" />
+      <group ref={mistRef} position={[1, 1.8, 0]}>
+        <Sparkles count={400} scale={[4, 1.5, 1.5]} size={3} speed={3} opacity={0.6} color="#ffffff" />
       </group>
     </>
   );
 }
 
 function Scene({ progress }: { progress: number }) {
+  const [noiseTex, setNoiseTex] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      setNoiseTex(ProceduralMaterials());
+    }
+  }, []);
+
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 1, 6]} fov={35} />
-      <Environment preset="city" />
+      <PerspectiveCamera makeDefault position={[0, 1.5, 7]} fov={30} />
+      <Environment preset="apartment" environmentIntensity={0.8} />
+      <SoftShadows size={20} samples={16} focus={0.5} />
       
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} />
-      <directionalLight position={[-5, 5, -5]} intensity={0.5} color="#E8DED0" />
+      <ambientLight intensity={0.2} color="#ffffff" />
+      <directionalLight 
+        position={[8, 12, 5]} 
+        intensity={1.2} 
+        color="#fff1e0" 
+        castShadow 
+        shadow-mapSize={[2048, 2048]} 
+        shadow-camera-near={0.5} 
+        shadow-camera-far={25} 
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={10}
+        shadow-camera-bottom={-10}
+        shadow-bias={-0.0001} 
+      />
+      <directionalLight position={[-5, 5, -5]} intensity={0.4} color="#d4e1ed" />
       
-      <Float speed={2} rotationIntensity={0.05} floatIntensity={0.1}>
-        <Pouch progress={progress} />
+      <Float speed={1.5} rotationIntensity={0.02} floatIntensity={0.05}>
+        <Pouch progress={progress} noiseTex={noiseTex} />
         <Film progress={progress} />
         <Glass progress={progress} />
         <Bottle progress={progress} />
       </Float>
-
+      
+      <Botanicals progress={progress} noiseTex={noiseTex} />
       <ParticlesAndMist progress={progress} />
 
-      {/* Ground plane for shadows */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
-        <planeGeometry args={[50, 50]} />
-        <meshStandardMaterial color="#F3EDE4" roughness={1} />
+      {/* Studio Backdrop for soft bouncing and contact shadows */}
+      <mesh position={[0, -2, -2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#f0eae1" roughness={1} />
       </mesh>
+      <mesh position={[0, 0, -5]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#f0eae1" roughness={1} />
+      </mesh>
+      
+      {/* High Quality Contact Shadows */}
+      <ContactShadows position={[0, -1.99, 0]} opacity={0.7} scale={15} blur={2.5} far={4} resolution={1024} color="#3e3a35" />
     </>
   );
 }
@@ -287,7 +391,6 @@ export function ChommsHouse3DHero({
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
-    // Artificial load delay for presentation feel
     const t = setTimeout(() => setLoaded(true), 1500);
     return () => clearTimeout(t);
   }, []);
@@ -323,13 +426,11 @@ export function ChommsHouse3DHero({
     };
   }, [onScroll]);
 
-  const currentStep = steps[activeIdx] ?? steps[0];
-
   return (
     <div className={cx("ch-root", className)}>
       <div className={cx("ch-loader", loaded && "ch-loader-done")}>
         <div className="ch-loader-text">
-          {loaded ? "Ready" : "Preparing your journey"}
+          {loaded ? "Ready" : "Preparing High-Fidelity Experience"}
         </div>
         <div className="ch-loader-track">
           <span className="ch-loader-fill" style={{ width: loaded ? "100%" : "60%" }} />
@@ -338,7 +439,7 @@ export function ChommsHouse3DHero({
 
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
-          <Canvas shadows dpr={[1, 2]}>
+          <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
             <Scene progress={progress} />
           </Canvas>
         </div>
@@ -350,7 +451,7 @@ export function ChommsHouse3DHero({
 
         <div className="ch-card-wrap">
           {steps.map((s, i) => (
-            <article key={s.num} className={cx("ch-card", i === activeIdx && "ch-card-active")}
+            <article key={s.num} className={cx("ch-card", i === activeIdx && "ch-card-active", i < activeIdx && "ch-card-prev")}
               style={{ ["--c" as any]: s.color }} aria-hidden={i !== activeIdx}>
               <div className="ch-card-inner">
                 <div className="ch-card-head">
