@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, AccumulativeShadows, RandomizedLight } from "@react-three/drei";
+import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, SpotLight } from "@react-three/drei";
 import * as THREE from "three";
 
 export type FrameSequenceStep = {
@@ -32,30 +32,59 @@ function mapRange(val: number, inMin: number, inMax: number, outMin: number, out
   return outMin + easeInOutCubic(t) * (outMax - outMin);
 }
 
-// --- 3D Scene Components ---
-
 function ProceduralMaterials() {
-  // Generate a noisy bump map for Kraft paper and Citrus
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 1024;
+  canvas.height = 1024;
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    for (let x = 0; x < 512; x++) {
-      for (let y = 0; y < 512; y++) {
-        const v = Math.random() * 255;
-        ctx.fillStyle = 'rgb(' + Math.round(v) + ',' + Math.round(v) + ',' + Math.round(v) + ')';
+    // Advanced Kraft Paper Texture Generation
+    for (let x = 0; x < 1024; x++) {
+      for (let y = 0; y < 1024; y++) {
+        const noise = Math.random();
+        const r = 160 + noise * 40;
+        const g = 120 + noise * 30;
+        const b = 80 + noise * 20;
+        ctx.fillStyle = 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
         ctx.fillRect(x, y, 1, 1);
       }
     }
+    // Add fibers
+    for (let i = 0; i < 5000; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 1024, Math.random() * 1024);
+      ctx.lineTo(Math.random() * 1024, Math.random() * 1024);
+      ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+      ctx.lineWidth = Math.random() * 1.5;
+      ctx.stroke();
+    }
   }
-  const noiseTex = new THREE.CanvasTexture(canvas);
-  noiseTex.wrapS = THREE.RepeatWrapping;
-  noiseTex.wrapT = THREE.RepeatWrapping;
-  return noiseTex;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  
+  // Bump Map for Glass/Plastic imperfections
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 512;
+  const bctx = bumpCanvas.getContext("2d");
+  if (bctx) {
+    for (let x = 0; x < 512; x++) {
+      for (let y = 0; y < 512; y++) {
+        const v = Math.round(Math.random() * 255);
+        bctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+        bctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+  bumpTex.wrapS = THREE.RepeatWrapping;
+  bumpTex.wrapT = THREE.RepeatWrapping;
+
+  return { tex, bumpTex };
 }
 
-function Pouch({ progress, noiseTex }: { progress: number, noiseTex: THREE.Texture | null }) {
+function Pouch({ progress, tex, bumpTex }: { progress: number, tex: THREE.Texture | null, bumpTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
   
   useFrame(() => {
@@ -82,18 +111,36 @@ function Pouch({ progress, noiseTex }: { progress: number, noiseTex: THREE.Textu
 
   return (
     <group ref={ref}>
-      <RoundedBox args={[1.5, 2.2, 0.12]} radius={0.05} smoothness={4} castShadow receiveShadow>
+      {/* Main Pouch Body */}
+      <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={8} castShadow receiveShadow>
         <meshStandardMaterial 
-          color="#a37b56" 
-          roughness={0.95} 
-          bumpMap={noiseTex} 
-          bumpScale={0.002}
+          map={tex}
+          color="#d9bfa3" 
+          roughness={0.9} 
+          bumpMap={bumpTex} 
+          bumpScale={0.005}
         />
       </RoundedBox>
-      {/* Front Label */}
-      <mesh position={[0, 0, 0.065]} receiveShadow>
+      {/* Top Seal */}
+      <RoundedBox args={[1.5, 0.3, 0.04]} position={[0, 1.05, 0]} radius={0.01} smoothness={4} castShadow receiveShadow>
+        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+      </RoundedBox>
+      {/* Side Seams */}
+      <RoundedBox args={[0.04, 2.0, 0.12]} position={[-0.75, -0.1, 0]} radius={0.01} castShadow receiveShadow>
+        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+      </RoundedBox>
+      <RoundedBox args={[0.04, 2.0, 0.12]} position={[0.75, -0.1, 0]} radius={0.01} castShadow receiveShadow>
+        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+      </RoundedBox>
+      {/* Front Label with high-end print look */}
+      <mesh position={[0, -0.1, 0.08]} receiveShadow>
         <planeGeometry args={[1.2, 1.6]} />
-        <meshStandardMaterial color="#fdfbf7" roughness={0.8} />
+        <meshPhysicalMaterial 
+          color="#fdfbf7" 
+          roughness={0.7} 
+          clearcoat={0.1} 
+          clearcoatRoughness={0.8}
+        />
       </mesh>
     </group>
   );
@@ -126,7 +173,7 @@ function Film({ progress }: { progress: number }) {
 
   return (
     <mesh ref={ref} castShadow>
-      <planeGeometry args={[1, 1.4, 16, 16]} />
+      <cylinderGeometry args={[2, 2, 1.4, 32, 1, true, -0.25, 0.5]} />
       <meshPhysicalMaterial 
         ref={matRef} 
         color="#F3EDE4" 
@@ -140,10 +187,29 @@ function Film({ progress }: { progress: number }) {
   );
 }
 
-function Glass({ progress }: { progress: number }) {
+function Glass({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
   const waterRef = useRef<THREE.MeshPhysicalMaterial>(null);
   
+  const glassPoints = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i <= 10; i++) pts.push(new THREE.Vector2(0.6 * (i/10), -0.9)); 
+    for (let i = 0; i <= 20; i++) pts.push(new THREE.Vector2(0.6 + 0.1*(i/20), -0.9 + 1.8*(i/20))); 
+    pts.push(new THREE.Vector2(0.7, 0.9)); 
+    pts.push(new THREE.Vector2(0.66, 0.9)); 
+    for (let i = 20; i >= 0; i--) pts.push(new THREE.Vector2(0.56 + 0.1*(i/20), -0.75 + 1.65*(i/20))); 
+    pts.push(new THREE.Vector2(0, -0.75)); 
+    return pts;
+  }, []);
+
+  const waterPoints = useMemo(() => {
+    const pts = [];
+    pts.push(new THREE.Vector2(0, -0.75));
+    for (let i = 0; i <= 20; i++) pts.push(new THREE.Vector2(0.56 + 0.1*(i/20), -0.75 + 1.2*(i/20)));
+    pts.push(new THREE.Vector2(0, 0.45)); 
+    return pts;
+  }, []);
+
   useFrame(() => {
     if (!ref.current || !waterRef.current) return;
     if (progress < 0.235) {
@@ -151,7 +217,7 @@ function Glass({ progress }: { progress: number }) {
     } else if (progress < 0.515) {
       ref.current.position.set(0, 0, 0);
       ref.current.rotation.set(0, progress * Math.PI, 0);
-      waterRef.current.color.setHex(0xcde3d6); // normal water
+      waterRef.current.color.setHex(0xcde3d6); 
     } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 0, -2), mapRange(progress, 0.515, 0.635, 0, 1.5), 0);
       ref.current.rotation.z = mapRange(progress, 0.515, 0.635, 0, -Math.PI / 2.5);
@@ -159,7 +225,6 @@ function Glass({ progress }: { progress: number }) {
       ref.current.position.set(0, -10, 0);
     }
     
-    // Dissolve color change
     if (progress >= 0.325 && progress < 0.515) {
       const dissolve = mapRange(progress, 0.325, 0.515, 0, 1);
       waterRef.current.color.lerpColors(new THREE.Color(0xcde3d6), new THREE.Color(0x9cb8a5), dissolve);
@@ -168,28 +233,31 @@ function Glass({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
-      <mesh castShadow receiveShadow position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.7, 0.6, 1.8, 64]} />
+      <mesh castShadow receiveShadow>
+        <latheGeometry args={[glassPoints, 64]} />
         <meshPhysicalMaterial 
           color="#ffffff" 
           transmission={1} 
-          roughness={0.02} 
+          roughness={0.05}
           ior={1.52} 
-          thickness={0.1}
+          thickness={0.5}
+          clearcoat={1}
+          clearcoatRoughness={0.05}
+          bumpMap={bumpTex}
+          bumpScale={0.0005}
           transparent 
-          side={THREE.DoubleSide} 
         />
       </mesh>
-      <mesh position={[0, -0.1, 0]}>
-        <cylinderGeometry args={[0.67, 0.57, 1.5, 64]} />
+      <mesh position={[0, 0.001, 0]}>
+        <latheGeometry args={[waterPoints, 64]} />
         <meshPhysicalMaterial 
           ref={waterRef}
           color="#cde3d6" 
-          transmission={0.95} 
-          roughness={0.1} 
+          transmission={0.98} 
+          roughness={0.05} 
           ior={1.33}
           attenuationColor="#a9c9b5"
-          attenuationDistance={2}
+          attenuationDistance={3}
           transparent 
         />
       </mesh>
@@ -197,10 +265,25 @@ function Glass({ progress }: { progress: number }) {
   );
 }
 
-function Bottle({ progress }: { progress: number }) {
+function Bottle({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
   const pumpRef = useRef<THREE.Group>(null);
   
+  const bottlePoints = useMemo(() => {
+    const pts = [];
+    pts.push(new THREE.Vector2(0, -0.8));
+    pts.push(new THREE.Vector2(0.55, -0.8)); 
+    pts.push(new THREE.Vector2(0.6, -0.75)); 
+    for(let i=0; i<=10; i++) pts.push(new THREE.Vector2(0.6, -0.75 + 1.25*(i/10))); 
+    pts.push(new THREE.Vector2(0.55, 0.55)); 
+    pts.push(new THREE.Vector2(0.4, 0.65)); 
+    pts.push(new THREE.Vector2(0.25, 0.75)); 
+    pts.push(new THREE.Vector2(0.2, 0.85)); 
+    pts.push(new THREE.Vector2(0.2, 1.0)); 
+    pts.push(new THREE.Vector2(0, 1.0)); 
+    return pts;
+  }, []);
+
   useFrame(() => {
     if (!ref.current || !pumpRef.current) return;
     if (progress < 0.425) {
@@ -226,45 +309,55 @@ function Bottle({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
-      {/* Bottle Body */}
-      <mesh castShadow receiveShadow position={[0, -0.6, 0]}>
-        <cylinderGeometry args={[0.6, 0.6, 1.4, 64]} />
-        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} clearcoatRoughness={0.1} />
-      </mesh>
-      {/* Bottle Shoulder */}
-      <mesh castShadow receiveShadow position={[0, 0.1, 0]}>
-        <sphereGeometry args={[0.6, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} />
+      {/* High-fidelity Bottle Body using Lathe */}
+      <mesh castShadow receiveShadow>
+        <latheGeometry args={[bottlePoints, 64]} />
+        <meshPhysicalMaterial 
+          color="#f4f1eb" 
+          roughness={0.12} 
+          clearcoat={1} 
+          clearcoatRoughness={0.08} 
+          bumpMap={bumpTex}
+          bumpScale={0.0002}
+        />
       </mesh>
       
-      {/* Pump Assembly */}
+      {/* Complex Pump Assembly */}
       <group ref={pumpRef} position={[0, 0, 0]}>
-        {/* Neck */}
-        <mesh castShadow receiveShadow position={[0, 0.8, 0]}>
-          <cylinderGeometry args={[0.2, 0.2, 0.3, 32]} />
-          <meshStandardMaterial color="#dddddd" roughness={0.4} metalness={0.8} />
+        {/* Neck Collar */}
+        <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.3, 64]} />
+          <meshStandardMaterial color="#d4d4d4" roughness={0.3} metalness={0.8} />
         </mesh>
         {/* Actuator Base */}
-        <mesh castShadow receiveShadow position={[0, 1.05, 0]}>
-          <cylinderGeometry args={[0.22, 0.22, 0.2, 32]} />
-          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        <mesh castShadow receiveShadow position={[0, 1.15, 0]}>
+          <cylinderGeometry args={[0.24, 0.24, 0.2, 64]} />
+          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
         </mesh>
-        {/* Actuator Head */}
-        <mesh castShadow receiveShadow position={[0, 1.25, 0]}>
-          <cylinderGeometry args={[0.18, 0.18, 0.3, 32]} />
-          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        {/* Actuator Head with Curved Top */}
+        <mesh castShadow receiveShadow position={[0, 1.35, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.3, 64]} />
+          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
         </mesh>
-        {/* Nozzle */}
-        <mesh castShadow receiveShadow position={[0.25, 1.25, 0]} rotation={[0, 0, -Math.PI/2]}>
-          <cylinderGeometry args={[0.08, 0.08, 0.3, 32]} />
-          <meshStandardMaterial color="#e0e0e0" roughness={0.4} />
+        <mesh castShadow receiveShadow position={[0, 1.5, 0]}>
+          <sphereGeometry args={[0.2, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+        </mesh>
+        {/* Nozzle Array */}
+        <mesh castShadow receiveShadow position={[0.25, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.2, 32]} />
+          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+        </mesh>
+        <mesh castShadow receiveShadow position={[0.36, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.02, 32]} />
+          <meshStandardMaterial color="#333333" roughness={0.8} />
         </mesh>
       </group>
     </group>
   );
 }
 
-function Botanicals({ progress, noiseTex }: { progress: number, noiseTex: THREE.Texture | null }) {
+function Botanicals({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
   
   useFrame(() => {
@@ -278,20 +371,25 @@ function Botanicals({ progress, noiseTex }: { progress: number, noiseTex: THREE.
 
   return (
     <group ref={ref}>
-      {/* Tangerine */}
+      {/* High-res Tangerine */}
       <mesh castShadow receiveShadow position={[-2, 0.4, 1]}>
-        <sphereGeometry args={[0.4, 32, 32]} />
-        <meshStandardMaterial color="#e87c31" roughness={0.7} bumpMap={noiseTex} bumpScale={0.01} />
+        <sphereGeometry args={[0.4, 64, 64]} />
+        <meshStandardMaterial color="#eb7b28" roughness={0.6} bumpMap={bumpTex} bumpScale={0.015} />
       </mesh>
-      {/* Kaffir Lime */}
+      {/* High-res Kaffir Lime */}
       <mesh castShadow receiveShadow position={[-1.2, 0.3, 1.8]}>
-        <sphereGeometry args={[0.3, 32, 32]} />
-        <meshStandardMaterial color="#4a633a" roughness={0.8} bumpMap={noiseTex} bumpScale={0.02} />
+        <sphereGeometry args={[0.3, 64, 64]} />
+        <meshStandardMaterial color="#40592e" roughness={0.8} bumpMap={bumpTex} bumpScale={0.03} />
       </mesh>
       {/* Cedarwood Stick */}
       <mesh castShadow receiveShadow position={[2, 0.1, 1]} rotation={[Math.PI/2, 0.2, 0.5]}>
-        <cylinderGeometry args={[0.1, 0.1, 1.5, 16]} />
-        <meshStandardMaterial color="#5c4033" roughness={1} bumpMap={noiseTex} bumpScale={0.05} />
+        <cylinderGeometry args={[0.1, 0.1, 1.5, 32]} />
+        <meshStandardMaterial color="#5c4033" roughness={1} bumpMap={bumpTex} bumpScale={0.08} />
+      </mesh>
+      {/* Eucalyptus Leaves (Procedural) */}
+      <mesh castShadow receiveShadow position={[1.5, 0.05, 1.5]} rotation={[-Math.PI/2, 0, 0.3]}>
+        <cylinderGeometry args={[0.3, 0.3, 0.02, 32, 1, false, 0, Math.PI]} />
+        <meshStandardMaterial color="#687d6d" roughness={0.7} bumpMap={bumpTex} bumpScale={0.002} />
       </mesh>
     </group>
   );
@@ -311,73 +409,65 @@ function ParticlesAndMist({ progress }: { progress: number }) {
 
   return (
     <>
-      <Sparkles count={80} scale={6} size={1.5} speed={0.2} opacity={0.3} color="#ffffff" />
+      <Sparkles count={150} scale={8} size={1.5} speed={0.2} opacity={0.3} color="#ffffff" />
       <group ref={mistRef} position={[1, 1.8, 0]}>
-        <Sparkles count={400} scale={[4, 1.5, 1.5]} size={3} speed={3} opacity={0.6} color="#ffffff" />
+        <Sparkles count={800} scale={[5, 2, 2]} size={2} speed={4} opacity={0.6} color="#ffffff" />
       </group>
     </>
   );
 }
 
 function Scene({ progress }: { progress: number }) {
-  const [noiseTex, setNoiseTex] = useState<THREE.Texture | null>(null);
+  const [mats, setMats] = useState<{ tex: THREE.Texture, bumpTex: THREE.Texture } | null>(null);
 
   useEffect(() => {
-    if (typeof document !== 'undefined') {
-      setNoiseTex(ProceduralMaterials());
+    if (typeof document !== "undefined") {
+      setMats(ProceduralMaterials());
     }
   }, []);
 
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 1.5, 7]} fov={30} />
-      <Environment preset="apartment" environmentIntensity={0.8} />
-      <SoftShadows size={20} samples={16} focus={0.5} />
+      <Environment preset="studio" environmentIntensity={1.2} />
+      <SoftShadows size={25} samples={24} focus={0.5} />
       
-      <ambientLight intensity={0.2} color="#ffffff" />
-      <directionalLight 
-        position={[8, 12, 5]} 
-        intensity={1.2} 
-        color="#fff1e0" 
-        castShadow 
-        shadow-mapSize={[2048, 2048]} 
-        shadow-camera-near={0.5} 
-        shadow-camera-far={25} 
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-        shadow-bias={-0.0001} 
+      <ambientLight intensity={0.4} color="#ffffff" />
+      
+      {/* Cinematic SpotLight for Premium Product Feel */}
+      <SpotLight
+        position={[5, 12, 6]}
+        angle={0.4}
+        penumbra={0.8}
+        intensity={2.5}
+        color="#fff5e6"
+        castShadow
+        shadow-mapSize={[4096, 4096]}
+        shadow-bias={-0.0001}
       />
-      <directionalLight position={[-5, 5, -5]} intensity={0.4} color="#d4e1ed" />
       
-      <Float speed={1.5} rotationIntensity={0.02} floatIntensity={0.05}>
-        <Pouch progress={progress} noiseTex={noiseTex} />
+      <directionalLight position={[-8, 5, -5]} intensity={0.6} color="#e0ecf8" />
+      
+      <Float speed={1.2} rotationIntensity={0.015} floatIntensity={0.03}>
+        <Pouch progress={progress} tex={mats?.tex || null} bumpTex={mats?.bumpTex || null} />
         <Film progress={progress} />
-        <Glass progress={progress} />
-        <Bottle progress={progress} />
+        <Glass progress={progress} bumpTex={mats?.bumpTex || null} />
+        <Bottle progress={progress} bumpTex={mats?.bumpTex || null} />
       </Float>
       
-      <Botanicals progress={progress} noiseTex={noiseTex} />
+      <Botanicals progress={progress} bumpTex={mats?.bumpTex || null} />
       <ParticlesAndMist progress={progress} />
 
-      {/* Studio Backdrop for soft bouncing and contact shadows */}
-      <mesh position={[0, -2, -2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#f0eae1" roughness={1} />
-      </mesh>
-      <mesh position={[0, 0, -5]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#f0eae1" roughness={1} />
+      {/* Infinite Infinity Cove Backdrop */}
+      <mesh position={[0, -2, -3]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[200, 200]} />
+        <meshPhysicalMaterial color="#f2eee9" roughness={1} clearcoat={0.1} />
       </mesh>
       
-      {/* High Quality Contact Shadows */}
-      <ContactShadows position={[0, -1.99, 0]} opacity={0.7} scale={15} blur={2.5} far={4} resolution={1024} color="#3e3a35" />
+      <ContactShadows position={[0, -1.99, 0]} opacity={0.8} scale={20} blur={3} far={4} resolution={2048} color="#2e2a25" />
     </>
   );
 }
-
-// --- Main UI Component ---
 
 export function ChommsHouse3DHero({
   scrollHeight = "1100vh", brand, navLinks = [], ctaLabel,
@@ -430,7 +520,7 @@ export function ChommsHouse3DHero({
     <div className={cx("ch-root", className)}>
       <div className={cx("ch-loader", loaded && "ch-loader-done")}>
         <div className="ch-loader-text">
-          {loaded ? "Ready" : "Preparing High-Fidelity Experience"}
+          {loaded ? "Ready" : "Preparing Ultra-High Fidelity Models"}
         </div>
         <div className="ch-loader-track">
           <span className="ch-loader-fill" style={{ width: loaded ? "100%" : "60%" }} />
@@ -439,8 +529,10 @@ export function ChommsHouse3DHero({
 
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
-          <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
-            <Scene progress={progress} />
+          <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}>
+            <React.Suspense fallback={null}>
+              <Scene progress={progress} />
+            </React.Suspense>
           </Canvas>
         </div>
 
@@ -464,7 +556,7 @@ export function ChommsHouse3DHero({
                   <div className="ch-ticks">
                     {steps.map((_, j) => (
                       <i className="ch-tick" key={j}>
-                        <span style={{ transform: `scaleX(${j < activeIdx ? 1 : j === activeIdx ? stepLocal : 0})` }} />
+                        <span style={{ transform: 'scaleX(' + (j < activeIdx ? 1 : j === activeIdx ? stepLocal : 0) + ')' }} />
                       </i>
                     ))}
                   </div>
@@ -475,7 +567,7 @@ export function ChommsHouse3DHero({
           ))}
         </div>
 
-        <div className="ch-progress"><span style={{ width: `${progress * 100}%` }} /></div>
+        <div className="ch-progress"><span style={{ width: (progress * 100) + "%" }} /></div>
         <div className="ch-step-badge">{String(activeIdx + 1).padStart(2, "0")} <i/> {String(steps.length).padStart(2, "0")}</div>
       </div>
 
