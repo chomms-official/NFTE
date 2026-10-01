@@ -432,14 +432,14 @@ function Scene({ progress }: { progress: number }) {
       <Environment preset="studio" environmentIntensity={1.2} />
       <SoftShadows size={25} samples={24} focus={0.5} />
       
-      <ambientLight intensity={0.4} color="#ffffff" />
+      <ambientLight intensity={0.1} color="#ffffff" />
       
       {/* Cinematic SpotLight for Premium Product Feel */}
       <SpotLight
         position={[5, 12, 6]}
         angle={0.4}
         penumbra={0.8}
-        intensity={2.5}
+        intensity={3.5}
         color="#fff5e6"
         castShadow
         shadow-mapSize={[4096, 4096]}
@@ -461,10 +461,10 @@ function Scene({ progress }: { progress: number }) {
       {/* Infinite Infinity Cove Backdrop */}
       <mesh position={[0, -2, -3]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshPhysicalMaterial color="#f2eee9" roughness={1} clearcoat={0.1} />
+        <meshPhysicalMaterial color="#181916" roughness={1} clearcoat={0.1} />
       </mesh>
       
-      <ContactShadows position={[0, -1.99, 0]} opacity={0.8} scale={20} blur={3} far={4} resolution={2048} color="#2e2a25" />
+      <ContactShadows position={[0, -1.99, 0]} opacity={0.8} scale={20} blur={3} far={4} resolution={2048} color="#000000" />
     </>
   );
 }

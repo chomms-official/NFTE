@@ -19,8 +19,8 @@
   }
   body {
     margin: 0;
-    background: #fbf9f6;
-    color: #3e3a35;
+    background: #181916;
+    color: #181916;
     font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -34,15 +34,15 @@
 .ch-root {
   position: relative;
   width: 100%;
-  background: #fbf9f6;
-  color: #3e3a35;
+  background: #181916;
+  color: #181916;
 }
 
 .ch-loader {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #fbf9f6;
+  background: #181916;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -98,7 +98,7 @@
   transition: all 0.5s ease;
 }
 .ch-nav-scrolled {
-  background: rgba(251, 249, 246, 0.85);
+  background: rgba(24, 25, 22, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(139, 99, 62, 0.1);
 }
@@ -124,12 +124,12 @@
     transition: color 0.3s ease;
   }
   .ch-nav-links a:hover {
-    color: #3e3a35;
+    color: #181916;
   }
 }
 .ch-cta {
-  background: #3e3a35;
-  color: #fbf9f6;
+  background: #fbf9f6;
+  color: #181916;
   padding: 0.6rem 1.5rem;
   border-radius: 2px;
   text-decoration: none;
@@ -243,9 +243,9 @@
   transform: translateY(-15px);
 }
 .ch-card-inner {
-  background: rgba(255, 253, 250, 0.6);
+  background: rgba(40, 42, 37, 0.6);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(139, 99, 62, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 12px 40px rgba(139, 99, 62, 0.08);
@@ -272,7 +272,7 @@
   font-size: 1.2rem;
   font-weight: 400;
   margin: 0 0 0.6rem 0;
-  color: #3e3a35;
+  color: #181916;
 }
 .ch-card-desc {
   font-size: 0.85rem;
