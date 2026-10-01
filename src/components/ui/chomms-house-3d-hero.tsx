@@ -38,18 +38,16 @@ function ProceduralMaterials() {
   canvas.height = 1024;
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    // Advanced Kraft Paper Texture Generation
-    for (let x = 0; x < 1024; x++) {
-      for (let y = 0; y < 1024; y++) {
+    for (let x = 0; x < 1024; x+=2) {
+      for (let y = 0; y < 1024; y+=2) {
         const noise = Math.random();
         const r = 160 + noise * 40;
         const g = 120 + noise * 30;
         const b = 80 + noise * 20;
         ctx.fillStyle = 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
-        ctx.fillRect(x, y, 1, 1);
+        ctx.fillRect(x, y, 2, 2);
       }
     }
-    // Add fibers
     for (let i = 0; i < 5000; i++) {
       ctx.beginPath();
       ctx.moveTo(Math.random() * 1024, Math.random() * 1024);
@@ -60,17 +58,15 @@ function ProceduralMaterials() {
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
   
-  // Bump Map for Glass/Plastic imperfections
   const bumpCanvas = document.createElement("canvas");
-  bumpCanvas.width = 512;
-  bumpCanvas.height = 512;
+  bumpCanvas.width = 256;
+  bumpCanvas.height = 256;
   const bctx = bumpCanvas.getContext("2d");
   if (bctx) {
-    for (let x = 0; x < 512; x++) {
-      for (let y = 0; y < 512; y++) {
+    for (let x = 0; x < 256; x++) {
+      for (let y = 0; y < 256; y++) {
         const v = Math.round(Math.random() * 255);
         bctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
         bctx.fillRect(x, y, 1, 1);
@@ -78,10 +74,49 @@ function ProceduralMaterials() {
     }
   }
   const bumpTex = new THREE.CanvasTexture(bumpCanvas);
-  bumpTex.wrapS = THREE.RepeatWrapping;
-  bumpTex.wrapT = THREE.RepeatWrapping;
+  bumpTex.wrapS = THREE.RepeatWrapping; bumpTex.wrapT = THREE.RepeatWrapping;
 
-  return { tex, bumpTex };
+  const pouchBumpCanvas = document.createElement("canvas");
+  pouchBumpCanvas.width = 1024;
+  pouchBumpCanvas.height = 1024;
+  const pctx = pouchBumpCanvas.getContext("2d");
+  if (pctx) {
+    pctx.fillStyle = '#808080';
+    pctx.fillRect(0, 0, 1024, 1024);
+    
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * 1024;
+      const y = Math.random() * 1024;
+      const r = 100 + Math.random() * 200;
+      const grad = pctx.createRadialGradient(x, y, 0, x, y, r);
+      const intensity = (Math.random() - 0.5) * 80;
+      const c = Math.round(128 + intensity);
+      grad.addColorStop(0, 'rgba(' + c + ',' + c + ',' + c + ', 0.6)');
+      grad.addColorStop(1, 'rgba(128,128,128,0)');
+      pctx.fillStyle = grad;
+      pctx.beginPath();
+      pctx.arc(x, y, r, 0, Math.PI * 2);
+      pctx.fill();
+    }
+    
+    for (let i = 0; i < 30; i++) {
+      pctx.beginPath();
+      pctx.moveTo(Math.random() * 1024, Math.random() * 1024);
+      pctx.lineTo(Math.random() * 1024, Math.random() * 1024);
+      pctx.strokeStyle = Math.random() > 0.5 ? 'rgba(200,200,200,0.5)' : 'rgba(50,50,50,0.5)';
+      pctx.lineWidth = 2 + Math.random() * 5;
+      pctx.stroke();
+    }
+    
+    for (let i = 0; i < 20000; i++) {
+      pctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      pctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
+    }
+  }
+  const pouchBumpTex = new THREE.CanvasTexture(pouchBumpCanvas);
+  pouchBumpTex.wrapS = THREE.RepeatWrapping; pouchBumpTex.wrapT = THREE.RepeatWrapping;
+
+  return { tex, bumpTex, pouchBumpTex };
 }
 
 function Pouch({ progress, tex, bumpTex }: { progress: number, tex: THREE.Texture | null, bumpTex: THREE.Texture | null }) {
@@ -111,34 +146,45 @@ function Pouch({ progress, tex, bumpTex }: { progress: number, tex: THREE.Textur
 
   return (
     <group ref={ref}>
-      {/* Main Pouch Body */}
-      <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={8} castShadow receiveShadow>
+      {/* Main Pouch Body with deep wrinkles */}
+      <RoundedBox args={[1.5, 2.0, 0.2]} position={[0, -0.1, 0]} radius={0.05} smoothness={8} castShadow receiveShadow>
         <meshStandardMaterial 
           map={tex}
           color="#d9bfa3" 
           roughness={0.9} 
           bumpMap={bumpTex} 
-          bumpScale={0.005}
+          bumpScale={0.04}
         />
       </RoundedBox>
       {/* Top Seal */}
       <RoundedBox args={[1.5, 0.3, 0.04]} position={[0, 1.05, 0]} radius={0.01} smoothness={4} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
       </RoundedBox>
       {/* Side Seams */}
-      <RoundedBox args={[0.04, 2.0, 0.12]} position={[-0.75, -0.1, 0]} radius={0.01} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+      <RoundedBox args={[0.06, 2.0, 0.12]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+        <meshStandardMaterial map={tex} color="#c4ac93" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
       </RoundedBox>
-      <RoundedBox args={[0.04, 2.0, 0.12]} position={[0.75, -0.1, 0]} radius={0.01} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#d9bfa3" roughness={0.9} bumpMap={bumpTex} bumpScale={0.005} />
+      <RoundedBox args={[0.06, 2.0, 0.12]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+        <meshStandardMaterial map={tex} color="#c4ac93" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
       </RoundedBox>
+      
+      {/* Tear Notches (visual indentations) */}
+      <mesh position={[-0.76, 0.95, 0]} rotation={[0, 0, Math.PI/4]}>
+        <boxGeometry args={[0.08, 0.08, 0.06]} />
+        <meshStandardMaterial color="#181916" />
+      </mesh>
+      <mesh position={[0.76, 0.95, 0]} rotation={[0, 0, Math.PI/4]}>
+        <boxGeometry args={[0.08, 0.08, 0.06]} />
+        <meshStandardMaterial color="#181916" />
+      </mesh>
+
       {/* Front Label with high-end print look */}
-      <mesh position={[0, -0.1, 0.08]} receiveShadow>
+      <mesh position={[0, -0.1, 0.11]} receiveShadow>
         <planeGeometry args={[1.2, 1.6]} />
         <meshPhysicalMaterial 
           color="#fdfbf7" 
-          roughness={0.7} 
-          clearcoat={0.1} 
+          roughness={0.6} 
+          clearcoat={0.3} 
           clearcoatRoughness={0.8}
         />
       </mesh>
@@ -418,11 +464,11 @@ function ParticlesAndMist({ progress }: { progress: number }) {
 }
 
 function Scene({ progress }: { progress: number }) {
-  const [mats, setMats] = useState<{ tex: THREE.Texture, bumpTex: THREE.Texture } | null>(null);
+  const [mats, setMats] = useState<{ tex: THREE.Texture, bumpTex: THREE.Texture, pouchBumpTex: THREE.Texture } | null>(null);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      setMats(ProceduralMaterials());
+      setMats(ProceduralMaterials() as any);
     }
   }, []);
 
@@ -449,7 +495,7 @@ function Scene({ progress }: { progress: number }) {
       <directionalLight position={[-8, 5, -5]} intensity={0.6} color="#e0ecf8" />
       
       <Float speed={1.2} rotationIntensity={0.015} floatIntensity={0.03}>
-        <Pouch progress={progress} tex={mats?.tex || null} bumpTex={mats?.bumpTex || null} />
+        <Pouch progress={progress} tex={mats?.tex || null} bumpTex={mats?.pouchBumpTex || null} />
         <Film progress={progress} />
         <Glass progress={progress} bumpTex={mats?.bumpTex || null} />
         <Bottle progress={progress} bumpTex={mats?.bumpTex || null} />
