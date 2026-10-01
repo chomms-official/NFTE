@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, SoftShadows, useGLTF } from "@react-three/drei";
+import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, AccumulativeShadows, RandomizedLight } from "@react-three/drei";
 import * as THREE from "three";
 
 export type FrameSequenceStep = {
@@ -35,6 +35,7 @@ function mapRange(val: number, inMin: number, inMax: number, outMin: number, out
 // --- 3D Scene Components ---
 
 function ProceduralMaterials() {
+  // Generate a noisy bump map for Kraft paper and Citrus
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 512;
@@ -42,8 +43,8 @@ function ProceduralMaterials() {
   if (ctx) {
     for (let x = 0; x < 512; x++) {
       for (let y = 0; y < 512; y++) {
-        const v = Math.round(Math.random() * 255);
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        const v = Math.random() * 255;
+        ctx.fillStyle = 'rgb(' + Math.round(v) + ',' + Math.round(v) + ',' + Math.round(v) + ')';
         ctx.fillRect(x, y, 1, 1);
       }
     }
@@ -54,19 +55,9 @@ function ProceduralMaterials() {
   return noiseTex;
 }
 
-function Pouch({ progress }: { progress: number }) {
+function Pouch({ progress, noiseTex }: { progress: number, noiseTex: THREE.Texture | null }) {
   const ref = useRef<THREE.Group>(null);
-  const { scene } = useGLTF('/models/chomms_house_3d_models/chomms-house-pouch.glb');
   
-  useEffect(() => {
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-  }, [scene]);
-
   useFrame(() => {
     if (!ref.current) return;
     if (progress < 0.055) {
@@ -91,79 +82,76 @@ function Pouch({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
-      <primitive object={scene} />
+      <RoundedBox args={[1.5, 2.2, 0.12]} radius={0.05} smoothness={4} castShadow receiveShadow>
+        <meshStandardMaterial 
+          color="#a37b56" 
+          roughness={0.95} 
+          bumpMap={noiseTex} 
+          bumpScale={0.002}
+        />
+      </RoundedBox>
+      {/* Front Label */}
+      <mesh position={[0, 0, 0.065]} receiveShadow>
+        <planeGeometry args={[1.2, 1.6]} />
+        <meshStandardMaterial color="#fdfbf7" roughness={0.8} />
+      </mesh>
     </group>
   );
 }
 
 function Film({ progress }: { progress: number }) {
-  const ref = useRef<THREE.Group>(null);
-  const { scene } = useGLTF('/models/chomms_house_3d_models/chomms-house-film.glb');
-  
-  useEffect(() => {
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-      }
-    });
-  }, [scene]);
+  const ref = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshPhysicalMaterial>(null);
 
   useFrame(() => {
-    if (!ref.current) return;
-    let targetOpacity = 0;
+    if (!ref.current || !matRef.current) return;
     if (progress < 0.145) {
       ref.current.position.set(0, 0.5, 1.5);
-      targetOpacity = 0;
+      matRef.current.opacity = 0;
     } else if (progress < 0.235) {
-      targetOpacity = 0.9;
+      matRef.current.opacity = 0.9;
       ref.current.position.set(0, mapRange(progress, 0.145, 0.235, 0.5, 1.5), mapRange(progress, 0.145, 0.235, 1.5, 2.5));
       ref.current.rotation.set(mapRange(progress, 0.145, 0.235, 0, -0.5), 0, 0);
     } else if (progress < 0.325) {
       ref.current.position.set(0, 2, 0);
       ref.current.rotation.set(-0.5, 0, 0);
-      targetOpacity = 0.9;
+      matRef.current.opacity = 0.9;
     } else if (progress < 0.425) {
       ref.current.position.set(0, mapRange(progress, 0.325, 0.425, 2, 0), 0);
-      targetOpacity = mapRange(progress, 0.325, 0.425, 0.9, 0);
+      matRef.current.opacity = mapRange(progress, 0.325, 0.425, 0.9, 0);
     } else {
-      targetOpacity = 0;
+      matRef.current.opacity = 0;
     }
-
-    scene.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material.transparent = true;
-        child.material.opacity = targetOpacity;
-      }
-    });
   });
 
   return (
-    <group ref={ref}>
-      <primitive object={scene} />
-    </group>
+    <mesh ref={ref} castShadow>
+      <planeGeometry args={[1, 1.4, 16, 16]} />
+      <meshPhysicalMaterial 
+        ref={matRef} 
+        color="#F3EDE4" 
+        transmission={0.8} 
+        roughness={0.2} 
+        thickness={0.01}
+        transparent 
+        side={THREE.DoubleSide} 
+      />
+    </mesh>
   );
 }
 
 function Glass({ progress }: { progress: number }) {
   const ref = useRef<THREE.Group>(null);
-  const { scene } = useGLTF('/models/chomms_house_3d_models/chomms-house-glass.glb');
-  
-  useEffect(() => {
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-  }, [scene]);
+  const waterRef = useRef<THREE.MeshPhysicalMaterial>(null);
   
   useFrame(() => {
-    if (!ref.current) return;
+    if (!ref.current || !waterRef.current) return;
     if (progress < 0.235) {
       ref.current.position.set(0, -10, 0);
     } else if (progress < 0.515) {
       ref.current.position.set(0, 0, 0);
       ref.current.rotation.set(0, progress * Math.PI, 0);
+      waterRef.current.color.setHex(0xcde3d6); // normal water
     } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 0, -2), mapRange(progress, 0.515, 0.635, 0, 1.5), 0);
       ref.current.rotation.z = mapRange(progress, 0.515, 0.635, 0, -Math.PI / 2.5);
@@ -171,61 +159,59 @@ function Glass({ progress }: { progress: number }) {
       ref.current.position.set(0, -10, 0);
     }
     
+    // Dissolve color change
     if (progress >= 0.325 && progress < 0.515) {
       const dissolve = mapRange(progress, 0.325, 0.515, 0, 1);
-      scene.traverse((child: any) => {
-        if (child.isMesh && child.material && (child.name.toLowerCase().includes("liquid") || child.name.toLowerCase().includes("water"))) {
-          if (!child.userData.originalColor) {
-            child.userData.originalColor = child.material.color.clone();
-            child.userData.targetColor = new THREE.Color(0x9cb8a5);
-          }
-          child.material.color.lerpColors(child.userData.originalColor, child.userData.targetColor, dissolve);
-        }
-      });
+      waterRef.current.color.lerpColors(new THREE.Color(0xcde3d6), new THREE.Color(0x9cb8a5), dissolve);
     }
   });
 
   return (
     <group ref={ref}>
-      <primitive object={scene} />
+      <mesh castShadow receiveShadow position={[0, 0, 0]}>
+        <cylinderGeometry args={[0.7, 0.6, 1.8, 64]} />
+        <meshPhysicalMaterial 
+          color="#ffffff" 
+          transmission={1} 
+          roughness={0.02} 
+          ior={1.52} 
+          thickness={0.1}
+          transparent 
+          side={THREE.DoubleSide} 
+        />
+      </mesh>
+      <mesh position={[0, -0.1, 0]}>
+        <cylinderGeometry args={[0.67, 0.57, 1.5, 64]} />
+        <meshPhysicalMaterial 
+          ref={waterRef}
+          color="#cde3d6" 
+          transmission={0.95} 
+          roughness={0.1} 
+          ior={1.33}
+          attenuationColor="#a9c9b5"
+          attenuationDistance={2}
+          transparent 
+        />
+      </mesh>
     </group>
   );
 }
 
 function Bottle({ progress }: { progress: number }) {
   const ref = useRef<THREE.Group>(null);
-  const pumpInitialY = useRef<number | null>(null);
-  const { scene } = useGLTF('/models/chomms_house_3d_models/chomms-house-spray-bottle-openable.glb');
-  
-  useEffect(() => {
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-  }, [scene]);
+  const pumpRef = useRef<THREE.Group>(null);
   
   useFrame(() => {
-    if (!ref.current) return;
+    if (!ref.current || !pumpRef.current) return;
     if (progress < 0.425) {
       ref.current.position.set(10, -10, 0);
     } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 3, 0), 0, 0);
       ref.current.rotation.set(0, 0, 0);
-      
-      const pump = scene.getObjectByName("PumpAssembly_OPENABLE");
-      if (pump) {
-        if (pumpInitialY.current === null) pumpInitialY.current = pump.position.y;
-        pump.position.y = pumpInitialY.current + 3;
-      }
+      pumpRef.current.position.y = 3;
     } else if (progress < 0.715) {
       ref.current.position.set(0, 0, 0);
-      const pump = scene.getObjectByName("PumpAssembly_OPENABLE");
-      if (pump) {
-        if (pumpInitialY.current === null) pumpInitialY.current = pump.position.y;
-        pump.position.y = pumpInitialY.current + mapRange(progress, 0.635, 0.715, 3, 0);
-      }
+      pumpRef.current.position.y = mapRange(progress, 0.635, 0.715, 3, 0);
     } else if (progress < 0.805) {
       ref.current.position.set(mapRange(progress, 0.715, 0.805, 0, 0.5), mapRange(progress, 0.715, 0.805, 0, 0.5), 0);
       ref.current.rotation.z = Math.sin(progress * 150) * 0.15;
@@ -240,7 +226,40 @@ function Bottle({ progress }: { progress: number }) {
 
   return (
     <group ref={ref}>
-      <primitive object={scene} />
+      {/* Bottle Body */}
+      <mesh castShadow receiveShadow position={[0, -0.6, 0]}>
+        <cylinderGeometry args={[0.6, 0.6, 1.4, 64]} />
+        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} clearcoatRoughness={0.1} />
+      </mesh>
+      {/* Bottle Shoulder */}
+      <mesh castShadow receiveShadow position={[0, 0.1, 0]}>
+        <sphereGeometry args={[0.6, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshPhysicalMaterial color="#f0eee9" roughness={0.15} clearcoat={1} />
+      </mesh>
+      
+      {/* Pump Assembly */}
+      <group ref={pumpRef} position={[0, 0, 0]}>
+        {/* Neck */}
+        <mesh castShadow receiveShadow position={[0, 0.8, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.3, 32]} />
+          <meshStandardMaterial color="#dddddd" roughness={0.4} metalness={0.8} />
+        </mesh>
+        {/* Actuator Base */}
+        <mesh castShadow receiveShadow position={[0, 1.05, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.2, 32]} />
+          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        </mesh>
+        {/* Actuator Head */}
+        <mesh castShadow receiveShadow position={[0, 1.25, 0]}>
+          <cylinderGeometry args={[0.18, 0.18, 0.3, 32]} />
+          <meshStandardMaterial color="#fafafa" roughness={0.3} />
+        </mesh>
+        {/* Nozzle */}
+        <mesh castShadow receiveShadow position={[0.25, 1.25, 0]} rotation={[0, 0, -Math.PI/2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.3, 32]} />
+          <meshStandardMaterial color="#e0e0e0" roughness={0.4} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -304,7 +323,7 @@ function Scene({ progress }: { progress: number }) {
   const [noiseTex, setNoiseTex] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
-    if (typeof document !== "undefined") {
+    if (typeof document !== 'undefined') {
       setNoiseTex(ProceduralMaterials());
     }
   }, []);
@@ -333,7 +352,7 @@ function Scene({ progress }: { progress: number }) {
       <directionalLight position={[-5, 5, -5]} intensity={0.4} color="#d4e1ed" />
       
       <Float speed={1.5} rotationIntensity={0.02} floatIntensity={0.05}>
-        <Pouch progress={progress} />
+        <Pouch progress={progress} noiseTex={noiseTex} />
         <Film progress={progress} />
         <Glass progress={progress} />
         <Bottle progress={progress} />
@@ -357,12 +376,6 @@ function Scene({ progress }: { progress: number }) {
     </>
   );
 }
-
-// Preload models for immediate display
-useGLTF.preload('/models/chomms_house_3d_models/chomms-house-pouch.glb');
-useGLTF.preload('/models/chomms_house_3d_models/chomms-house-film.glb');
-useGLTF.preload('/models/chomms_house_3d_models/chomms-house-glass.glb');
-useGLTF.preload('/models/chomms_house_3d_models/chomms-house-spray-bottle-openable.glb');
 
 // --- Main UI Component ---
 
@@ -417,7 +430,7 @@ export function ChommsHouse3DHero({
     <div className={cx("ch-root", className)}>
       <div className={cx("ch-loader", loaded && "ch-loader-done")}>
         <div className="ch-loader-text">
-          {loaded ? "Ready" : "Loading GLB Models"}
+          {loaded ? "Ready" : "Preparing High-Fidelity Experience"}
         </div>
         <div className="ch-loader-track">
           <span className="ch-loader-fill" style={{ width: loaded ? "100%" : "60%" }} />
@@ -427,9 +440,7 @@ export function ChommsHouse3DHero({
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
           <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
-            <React.Suspense fallback={null}>
-              <Scene progress={progress} />
-            </React.Suspense>
+            <Scene progress={progress} />
           </Canvas>
         </div>
 
