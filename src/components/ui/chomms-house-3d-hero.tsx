@@ -57,6 +57,16 @@ function ProceduralMaterials() {
       ctx.lineTo(Math.random() * 512, Math.random() * 512);
     }
     ctx.stroke();
+    // Add botanical line-art directly to kraft paper to avoid grey translucent plane
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 3;
+    for(let i=0; i<40; i++) {
+      ctx.beginPath();
+      const sx = Math.random() * 512, sy = Math.random() * 512;
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(sx + (Math.random()-0.5)*100, sy + (Math.random()-0.5)*100, sx + (Math.random()-0.5)*150, sy + (Math.random()-0.5)*150);
+      ctx.stroke();
+    }
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
@@ -111,15 +121,6 @@ function ProceduralMaterials() {
   const lctx = labelCanvas.getContext("2d");
   if (lctx) {
     lctx.clearRect(0, 0, 1024, 1024);
-    lctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-    lctx.lineWidth = 3;
-    for(let i=0; i<40; i++) {
-      lctx.beginPath();
-      const sx = Math.random() * 1024, sy = Math.random() * 1024;
-      lctx.moveTo(sx, sy);
-      lctx.quadraticCurveTo(sx + (Math.random()-0.5)*200, sy + (Math.random()-0.5)*200, sx + (Math.random()-0.5)*300, sy + (Math.random()-0.5)*300);
-      lctx.stroke();
-    }
     lctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     lctx.save();
     lctx.translate(512, 350); lctx.rotate(Math.PI/4); // Shifted down so it doesn't get torn
@@ -599,6 +600,42 @@ export function ChommsHouse3DHero({
     return () => clearTimeout(t);
   }, []);
   
+  
+  useEffect(() => {
+    let animationFrameId: number;
+    let lastUserInteraction = Date.now();
+    let scrollingDown = true;
+
+    const onUserInteraction = () => {
+      lastUserInteraction = Date.now();
+    };
+
+    window.addEventListener('wheel', onUserInteraction);
+    window.addEventListener('touchmove', onUserInteraction);
+    window.addEventListener('keydown', onUserInteraction);
+
+    const autoScroll = () => {
+      if (Date.now() - lastUserInteraction > 10000) {
+        window.scrollBy({ top: scrollingDown ? 1.5 : -1.5, behavior: 'instant' });
+        if (window.scrollY >= document.body.scrollHeight - window.innerHeight - 10) {
+           scrollingDown = false;
+        } else if (window.scrollY <= 10) {
+           scrollingDown = true;
+        }
+      }
+      animationFrameId = requestAnimationFrame(autoScroll);
+    };
+    
+    autoScroll();
+
+    return () => {
+      window.removeEventListener('wheel', onUserInteraction);
+      window.removeEventListener('touchmove', onUserInteraction);
+      window.removeEventListener('keydown', onUserInteraction);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
   const stepIndexFor = useCallback((p: number) => {
     for (let i = 0; i < steps.length; i++) {
       if (p >= steps[i].from && p < steps[i].to) return i;
@@ -634,11 +671,9 @@ export function ChommsHouse3DHero({
     <div className={cx("ch-root", className)}>
       <div className={cx("ch-loader", loaded && "ch-loader-done")}>
         <div className="ch-loader-text">
-          {loaded ? "Ready" : "Preparing Ultra-High Fidelity Models"}
+          {loaded ? "Welcome" : "Chomm's House x NFTE"}
         </div>
-        <div className="ch-loader-track">
-          <span className="ch-loader-fill" style={{ width: loaded ? "100%" : "60%" }} />
-        </div>
+        
       </div>
 
       <div className="ch-stage">
