@@ -232,16 +232,7 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
         </mesh>
       </group>
 
-      {/* Front Label */}
-      <mesh position={[0, -0.1, 0.16]} receiveShadow>
-        <planeGeometry args={[1.4, 1.9]} />
-        <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} />
-      </mesh>
-      {/* Back Label (Mirror) */}
-      <mesh position={[0, -0.1, -0.16]} rotation={[0, Math.PI, 0]} receiveShadow>
-        <planeGeometry args={[1.4, 1.9]} />
-        <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} />
-      </mesh>
+      
     </group>
   );
 }
