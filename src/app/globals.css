@@ -20,7 +20,7 @@
   body {
     margin: 0;
     background: #181916;
-    color: #181916;
+    color: #fbf9f6;
     font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -35,7 +35,7 @@
   position: relative;
   width: 100%;
   background: #181916;
-  color: #181916;
+  color: #fbf9f6;
 }
 
 .ch-loader {
@@ -57,7 +57,7 @@
 .ch-loader-text {
   font-size: 1rem;
   font-weight: 300;
-  color: #6e685f;
+  color: #d1cbc1;
   text-align: center;
   line-height: 1.6;
   letter-spacing: 0.05em;
@@ -115,7 +115,7 @@
     gap: 2.5rem;
   }
   .ch-nav-links a {
-    color: #6e685f;
+    color: #d1cbc1;
     text-decoration: none;
     font-size: 0.85rem;
     font-family: system-ui, -apple-system, sans-serif;
@@ -124,7 +124,7 @@
     transition: color 0.3s ease;
   }
   .ch-nav-links a:hover {
-    color: #181916;
+    color: #fbf9f6;
   }
 }
 .ch-cta {
@@ -206,7 +206,7 @@
 }
 .ch-sub {
   font-size: 1.25rem;
-  color: #666;
+  color: #a49e95;
   margin-top: 1rem;
   transition: opacity 0.3s;
 }
@@ -272,11 +272,11 @@
   font-size: 1.2rem;
   font-weight: 400;
   margin: 0 0 0.6rem 0;
-  color: #181916;
+  color: #fbf9f6;
 }
 .ch-card-desc {
   font-size: 0.85rem;
-  color: #6e685f;
+  color: #d1cbc1;
   margin: 0 0 1.5rem 0;
   line-height: 1.5;
   font-family: system-ui, -apple-system, sans-serif;

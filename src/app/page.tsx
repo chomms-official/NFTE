@@ -133,11 +133,11 @@ const steps: FrameSequenceStep[] = [
 
 export default function Home() {
   return (
-    <main className="bg-[#fbf9f6] min-h-screen font-serif text-[#3e3a35]">
+    <main className="bg-[#181916] min-h-screen font-serif text-[#fbf9f6]">
       <ChommsHouse3DHero
         scrollHeight="1100vh"
         brand={
-          <div className="flex items-center gap-2 text-[#3e3a35]">
+          <div className="flex items-center gap-2 text-[#fbf9f6]">
             <span className="w-2 h-2 rounded-full bg-[#7FA39A]" />
             <span className="tracking-wide">Chomm’s House</span>
           </div>
@@ -152,11 +152,11 @@ export default function Home() {
         ctaHref="#how-to-use"
         title={
           <div className="flex flex-col items-start mt-2">
-            <span className="text-[#3e3a35] text-2xl md:text-4xl font-semibold mb-0 md:mb-1">Chomm's House</span>
-            <span className="text-[#7F9586] text-lg md:text-2xl font-light italic">Natural Protection</span>
+            <span className="text-[#fbf9f6] text-2xl md:text-4xl font-semibold mb-0 md:mb-1">Chomm's House</span>
+            <span className="text-[#a9c9b5] text-lg md:text-2xl font-light italic">Natural Protection</span>
           </div>
         }
-        subtitle={<p className="text-sm text-[#6e685f] mt-2">Scroll to experience.</p>}
+        subtitle={<p className="text-sm text-[#a49e95] mt-2">Scroll to experience.</p>}
         steps={steps}
       />
     </main>
