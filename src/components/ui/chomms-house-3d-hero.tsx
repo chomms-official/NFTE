@@ -271,14 +271,13 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
       </mesh>
 
       {/* Printed Graphic Label (Directly mapped transparent canvas) */}
-      <mesh position={[0, -0.1, 0.08]} receiveShadow>
+      <mesh position={[0, -0.1, 0.16]} receiveShadow>
         <planeGeometry args={[1.4, 1.9]} />
         <meshStandardMaterial 
           map={labelTex}
-          transparent
-          alphaTest={0.01}
-          roughness={0.9} 
-          depthWrite={false}
+          transparent={true}
+          roughness={0.8} 
+          depthWrite={true}
         />
       </mesh>
     </group>
@@ -587,13 +586,9 @@ function Scene({ progress }: { progress: number }) {
       
       <Botanicals progress={progress} bumpTex={mats?.bumpTex || null} />
       <ParticlesAndMist progress={progress} />
-
-      <mesh position={[0, -2, -3]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshPhysicalMaterial color="#181916" roughness={1} clearcoat={0.1} />
-      </mesh>
       
-      <ContactShadows position={[0, -1.99, 0]} opacity={0.8} scale={20} blur={3} far={4} resolution={2048} color="#000000" />
+      {/* ContactShadows floating on CSS background */}
+      <ContactShadows position={[0, -1.99, 0]} opacity={0.6} scale={20} blur={2.5} far={4} resolution={1024} color="#000000" />
     </>
   );
 }
