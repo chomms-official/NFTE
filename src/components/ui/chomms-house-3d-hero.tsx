@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, SpotLight } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -527,6 +527,20 @@ function ParticlesAndMist({ progress }: { progress: number }) {
   );
 }
 
+
+function CameraAdjuster() {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    const aspect = size.width / size.height;
+    if (aspect < 1) {
+      camera.position.set(0, 1.5, 7 + (1 - aspect) * 12); // Move back on narrow screens
+    } else {
+      camera.position.set(0, 1.5, 7);
+    }
+  }, [camera, size]);
+  return null;
+}
+
 function Scene({ progress }: { progress: number }) {
   const [mats, setMats] = useState<{ tex: THREE.Texture, bumpTex: THREE.Texture, pouchBumpTex: THREE.Texture, labelTex: THREE.Texture, filmBumpTex: THREE.Texture } | null>(null);
 
@@ -540,6 +554,7 @@ function Scene({ progress }: { progress: number }) {
     <>
       <PerspectiveCamera makeDefault position={[0, 1.5, 7]} fov={30} />
       <Environment preset="studio" environmentIntensity={1.2} />
+        <CameraAdjuster />
             
       <ambientLight intensity={0.1} color="#ffffff" />
       
