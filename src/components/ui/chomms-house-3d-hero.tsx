@@ -33,30 +33,73 @@ function mapRange(val: number, inMin: number, inMax: number, outMin: number, out
 }
 
 function ProceduralMaterials() {
-  // 1. Kraft Paper Base (Optimized via ImageData)
+  // 1. Kraft Paper Base + Graphic Label (Combined for PERFECT mapping)
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 1024;
+  canvas.height = 1024;
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    const id = ctx.createImageData(512, 512);
+    // Kraft noise
+    const id = ctx.createImageData(1024, 1024);
     const d = id.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const noise = Math.random();
-      d[i] = 140 + noise * 30;
-      d[i+1] = 100 + noise * 20;
-      d[i+2] = 65 + noise * 15;
-      d[i+3] = 255;
+    for (let x = 0; x < 1024; x += 2) {
+      for (let y = 0; y < 1024; y += 2) {
+        const noise = Math.random();
+        const r = 140 + noise * 30;
+        const g = 100 + noise * 20;
+        const b = 65 + noise * 15;
+        for (let dx = 0; dx < 2; dx++) {
+          for (let dy = 0; dy < 2; dy++) {
+            const i = ((y + dy) * 1024 + (x + dx)) * 4;
+            d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+          }
+        }
+      }
     }
     ctx.putImageData(id, 0, 0);
+    
     // Draw fibers
     ctx.strokeStyle = "rgba(0,0,0,0.08)";
     ctx.beginPath();
-    for (let i = 0; i < 500; i++) {
-      ctx.moveTo(Math.random() * 512, Math.random() * 512);
-      ctx.lineTo(Math.random() * 512, Math.random() * 512);
+    for (let i = 0; i < 1000; i++) {
+      ctx.moveTo(Math.random() * 1024, Math.random() * 1024);
+      ctx.lineTo(Math.random() * 1024, Math.random() * 1024);
     }
     ctx.stroke();
+
+    // -- DRAW THE GRAPHIC LABEL DIRECTLY ON THE KRAFT PAPER --
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 3;
+    for(let i=0; i<40; i++) {
+      ctx.beginPath();
+      const sx = Math.random() * 1024, sy = Math.random() * 1024;
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(sx + (Math.random()-0.5)*200, sy + (Math.random()-0.5)*200, sx + (Math.random()-0.5)*300, sy + (Math.random()-0.5)*300);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.save();
+    ctx.translate(512, 280); ctx.rotate(Math.PI/4);
+    ctx.fillRect(-25, -25, 50, 50); ctx.clearRect(-12, -12, 24, 24); 
+    ctx.restore();
+    ctx.textAlign = "center"; ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.font = "italic 700 110px Georgia, serif";
+    ctx.fillText("Chomm's", 512, 440);
+    ctx.font = "bold 32px sans-serif";
+    ctx.fillText("H   O   U   S   E", 512, 510);
+    ctx.font = "500 36px sans-serif";
+    ctx.fillText("MOSQUITO", 512, 640);
+    ctx.fillText("REPELLENT FILM", 512, 690);
+    ctx.beginPath();
+    ctx.arc(512, 740, 5, 0, Math.PI*2);
+    ctx.moveTo(512, 740); ctx.lineTo(495, 730);
+    ctx.moveTo(512, 740); ctx.lineTo(529, 730);
+    ctx.moveTo(512, 745); ctx.lineTo(505, 755);
+    ctx.moveTo(512, 745); ctx.lineTo(519, 755);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.95)"; ctx.lineWidth = 3; ctx.stroke(); ctx.fill();
+    ctx.font = "italic 28px Georgia, serif"; ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillText("Tangerine - Geraniol - Kaffir Lime", 512, 850);
+    ctx.fillText("Lemon - Eucalyptus - Cedarwood", 512, 895);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
@@ -79,14 +122,14 @@ function ProceduralMaterials() {
 
   // 3. Pouch Wrinkle Bump (Optimized)
   const pouchBumpCanvas = document.createElement("canvas");
-  pouchBumpCanvas.width = 512;
-  pouchBumpCanvas.height = 512;
+  pouchBumpCanvas.width = 1024;
+  pouchBumpCanvas.height = 1024;
   const pctx = pouchBumpCanvas.getContext("2d");
   if (pctx) {
     pctx.fillStyle = "#808080";
-    pctx.fillRect(0, 0, 512, 512);
+    pctx.fillRect(0, 0, 1024, 1024);
     for (let i = 0; i < 20; i++) {
-      const x = Math.random() * 512, y = Math.random() * 512, r = 50 + Math.random() * 100;
+      const x = Math.random() * 1024, y = Math.random() * 1024, r = 100 + Math.random() * 200;
       const grad = pctx.createRadialGradient(x, y, 0, x, y, r);
       const intensity = (Math.random() - 0.5) * 80;
       const c = Math.round(128 + intensity);
@@ -96,55 +139,16 @@ function ProceduralMaterials() {
     }
     pctx.beginPath();
     for (let i = 0; i < 15; i++) {
-      pctx.moveTo(Math.random() * 512, Math.random() * 512);
-      pctx.lineTo(Math.random() * 512, Math.random() * 512);
+      pctx.moveTo(Math.random() * 1024, Math.random() * 1024);
+      pctx.lineTo(Math.random() * 1024, Math.random() * 1024);
     }
-    pctx.strokeStyle = "rgba(200,200,200,0.5)"; pctx.lineWidth = 4; pctx.stroke();
+    pctx.strokeStyle = "rgba(200,200,200,0.5)"; pctx.lineWidth = 6; pctx.stroke();
   }
   const pouchBumpTex = new THREE.CanvasTexture(pouchBumpCanvas);
   pouchBumpTex.wrapS = THREE.RepeatWrapping; pouchBumpTex.wrapT = THREE.RepeatWrapping;
 
-  // 4. Pouch Graphic Label
-  const labelCanvas = document.createElement("canvas");
-  labelCanvas.width = 1024;
-  labelCanvas.height = 1024;
-  const lctx = labelCanvas.getContext("2d");
-  if (lctx) {
-    lctx.clearRect(0, 0, 1024, 1024);
-    lctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-    lctx.lineWidth = 3;
-    for(let i=0; i<40; i++) {
-      lctx.beginPath();
-      const sx = Math.random() * 1024, sy = Math.random() * 1024;
-      lctx.moveTo(sx, sy);
-      lctx.quadraticCurveTo(sx + (Math.random()-0.5)*200, sy + (Math.random()-0.5)*200, sx + (Math.random()-0.5)*300, sy + (Math.random()-0.5)*300);
-      lctx.stroke();
-    }
-    lctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    lctx.save();
-    lctx.translate(512, 280); lctx.rotate(Math.PI/4);
-    lctx.fillRect(-25, -25, 50, 50); lctx.clearRect(-12, -12, 24, 24); 
-    lctx.restore();
-    lctx.textAlign = "center"; lctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    lctx.font = "italic 700 110px Georgia, serif";
-    lctx.fillText("Chomm's", 512, 440);
-    lctx.font = "bold 32px sans-serif";
-    lctx.fillText("H   O   U   S   E", 512, 510);
-    lctx.font = "500 36px sans-serif";
-    lctx.fillText("MOSQUITO", 512, 640);
-    lctx.fillText("REPELLENT FILM", 512, 690);
-    lctx.beginPath();
-    lctx.arc(512, 740, 5, 0, Math.PI*2);
-    lctx.moveTo(512, 740); lctx.lineTo(495, 730);
-    lctx.moveTo(512, 740); lctx.lineTo(529, 730);
-    lctx.moveTo(512, 745); lctx.lineTo(505, 755);
-    lctx.moveTo(512, 745); lctx.lineTo(519, 755);
-    lctx.strokeStyle = "rgba(255, 255, 255, 0.95)"; lctx.lineWidth = 3; lctx.stroke(); lctx.fill();
-    lctx.font = "italic 28px Georgia, serif"; lctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-    lctx.fillText("Tangerine · Geraniol · Kaffir Lime", 512, 850);
-    lctx.fillText("Lemon · Eucalyptus · Cedarwood", 512, 895);
-  }
-  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  // 4. Label Tex is now baked
+  const labelTex = tex;
 
   // 5. Film Fibrous Bump
   const filmBumpCanvas = document.createElement("canvas");
@@ -170,6 +174,10 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
   const ref = useRef<THREE.Group>(null);
   const topSealRef = useRef<THREE.Group>(null);
   
+  // Create local clipping planes
+  const clipBottom = React.useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.7), []);
+  const clipTop = React.useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.7), []);
+
   useFrame(() => {
     if (!ref.current) return;
     if (progress < 0.055) {
@@ -197,6 +205,7 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
         topSealRef.current.rotation.set(0, 0, 0);
       } else if (progress < 0.145) {
         const tear = mapRange(progress, 0.055, 0.145, 0, 1);
+        // Animate the torn top piece flying away
         topSealRef.current.position.set(tear * 3, -tear * 1.5, tear * 1.5);
         topSealRef.current.rotation.set(tear * 2, tear * 1.5, -tear * 0.8);
       } else {
@@ -207,32 +216,41 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
 
   return (
     <group ref={ref}>
-      <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#e0c5aa" roughness={0.95} bumpMap={bumpTex} bumpScale={0.04} />
-      </RoundedBox>
-      <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
-      </RoundedBox>
-      <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-        <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
-      </RoundedBox>
-      
-      {/* Top Seal Tearing Animation Group */}
-      <group ref={topSealRef}>
-        <RoundedBox args={[1.5, 0.3, 0.04]} position={[0, 1.05, 0]} radius={0.01} smoothness={2} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} />
+      {/* Bottom Part (Keeps everything below y=0.7) */}
+      <group>
+        <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#e0c5aa" roughness={0.95} bumpMap={bumpTex} bumpScale={0.04} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
         </RoundedBox>
-        <mesh position={[-0.78, 0.95, 0]} rotation={[0, 0, Math.PI/4]}>
+        <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+        </RoundedBox>
+        <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+        </RoundedBox>
+      </group>
+      
+      {/* Top Part (Tears Off, keeps everything above y=0.7) */}
+      <group ref={topSealRef}>
+        <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#e0c5aa" roughness={0.95} bumpMap={bumpTex} bumpScale={0.04} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+        </RoundedBox>
+        <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+        </RoundedBox>
+        <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
+          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+        </RoundedBox>
+        
+        {/* Tear Notches (Black triangles) attached to the top part */}
+        <mesh position={[-0.75, 0.65, 0]} rotation={[0, 0, Math.PI/4]}>
           <boxGeometry args={[0.1, 0.1, 0.08]} />
           <meshStandardMaterial color="#181916" />
         </mesh>
-        <mesh position={[0.78, 0.95, 0]} rotation={[0, 0, Math.PI/4]}>
+        <mesh position={[0.75, 0.65, 0]} rotation={[0, 0, Math.PI/4]}>
           <boxGeometry args={[0.1, 0.1, 0.08]} />
           <meshStandardMaterial color="#181916" />
         </mesh>
       </group>
-
-      
     </group>
   );
 }
@@ -609,7 +627,7 @@ export function ChommsHouse3DHero({
 
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
-          <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}>
+          <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2, localClippingEnabled: true }}>
             <React.Suspense fallback={null}>
               <Scene progress={progress} />
             </React.Suspense>
