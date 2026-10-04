@@ -235,12 +235,12 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
       {/* Front Label */}
       <mesh position={[0, -0.1, 0.16]} receiveShadow>
         <planeGeometry args={[1.4, 1.9]} />
-        <meshStandardMaterial map={labelTex} transparent={true} depthWrite={false} depthTest={true} />
+        <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} />
       </mesh>
       {/* Back Label (Mirror) */}
       <mesh position={[0, -0.1, -0.16]} rotation={[0, Math.PI, 0]} receiveShadow>
         <planeGeometry args={[1.4, 1.9]} />
-        <meshStandardMaterial map={labelTex} transparent={true} depthWrite={false} depthTest={true} />
+        <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} />
       </mesh>
     </group>
   );
@@ -538,14 +538,18 @@ function Scene({ progress }: { progress: number }) {
       
       <directionalLight position={[-8, 5, -5]} intensity={0.6} color="#e0ecf8" />
       
-      <Float speed={1.2} rotationIntensity={0.015} floatIntensity={0.03}>
-        <Pouch progress={progress} tex={mats?.tex || null} bumpTex={mats?.pouchBumpTex || null} labelTex={mats?.labelTex || null} />
-        <Film progress={progress} filmBumpTex={mats?.filmBumpTex || null} />
-        <Glass progress={progress} bumpTex={mats?.bumpTex || null} />
-        <Bottle progress={progress} bumpTex={mats?.bumpTex || null} />
-      </Float>
+      {mats && (
+        <>
+          <Float speed={1.2} rotationIntensity={0.015} floatIntensity={0.03}>
+            <Pouch progress={progress} tex={mats.tex} bumpTex={mats.pouchBumpTex} labelTex={mats.labelTex} />
+            <Film progress={progress} filmBumpTex={mats.filmBumpTex} />
+            <Glass progress={progress} bumpTex={mats.bumpTex} />
+            <Bottle progress={progress} bumpTex={mats.bumpTex} />
+          </Float>
+          <Botanicals progress={progress} bumpTex={mats.bumpTex} />
+        </>
+      )}
       
-      <Botanicals progress={progress} bumpTex={mats?.bumpTex || null} />
       <ParticlesAndMist progress={progress} />
       
       {/* ContactShadows floating on CSS background */}
