@@ -258,15 +258,7 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
           <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />
         </mesh>
         
-        {/* Tear Notches exactly at y=0.7 */}
-        <mesh position={[-0.75, 0.7, 0]} rotation={[0, 0, Math.PI/4]}>
-          <boxGeometry args={[0.1, 0.1, 0.1]} />
-          <meshStandardMaterial color="#181916" />
-        </mesh>
-        <mesh position={[0.75, 0.7, 0]} rotation={[0, 0, Math.PI/4]}>
-          <boxGeometry args={[0.1, 0.1, 0.1]} />
-          <meshStandardMaterial color="#181916" />
-        </mesh>
+        
       </group>
     </group>
   );
@@ -613,6 +605,8 @@ export function ChommsHouse3DHero({
     window.addEventListener('wheel', onUserInteraction);
     window.addEventListener('touchmove', onUserInteraction);
     window.addEventListener('keydown', onUserInteraction);
+    window.addEventListener('mousedown', onUserInteraction);
+    window.addEventListener('touchstart', onUserInteraction);
 
     const autoScroll = () => {
       if (Date.now() - lastUserInteraction > 10000) {
@@ -632,6 +626,8 @@ export function ChommsHouse3DHero({
       window.removeEventListener('wheel', onUserInteraction);
       window.removeEventListener('touchmove', onUserInteraction);
       window.removeEventListener('keydown', onUserInteraction);
+      window.removeEventListener('mousedown', onUserInteraction);
+      window.removeEventListener('touchstart', onUserInteraction);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
