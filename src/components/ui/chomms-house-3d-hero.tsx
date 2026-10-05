@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, SpotLight } from "@react-three/drei";
+import { Environment, Outlines, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, SpotLight } from "@react-three/drei";
 import * as THREE from "three";
 
 export type FrameSequenceStep = {
@@ -168,7 +168,7 @@ function ProceduralMaterials() {
 }
 
 
-function WaterStream({ progress }: { progress: number }) {
+function WaterStream({ progress, toonGradient }: { progress: number, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Mesh>(null);
   
   useFrame(() => {
@@ -222,12 +222,12 @@ function WaterStream({ progress }: { progress: number }) {
   return (
     <mesh ref={ref} visible={false}>
       <cylinderGeometry args={[1, 1, 1, 16]} />
-      <meshPhysicalMaterial color="#9cb8a5" transmission={0.98} roughness={0.1} ior={1.33} transparent />
+      <meshToonMaterial gradientMap={toonGradient} color="#72b2f2" opacity={0.6} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
     </mesh>
   );
 }
 
-function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: THREE.Texture | null, bumpTex: THREE.Texture | null, labelTex: THREE.Texture | null }) {
+function Pouch({ progress, tex, bumpTex, labelTex, toonGradient }: { progress: number, tex: THREE.Texture | null, bumpTex: THREE.Texture | null, labelTex: THREE.Texture | null, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Group>(null);
   const topSealRef = useRef<THREE.Group>(null);
   
@@ -276,46 +276,46 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
       {/* Bottom Part (Keeps everything below y=0.7) */}
       <group>
         <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#e0c5aa" roughness={0.95} bumpMap={bumpTex} bumpScale={0.04} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         {/* Front Label Bottom */}
         <mesh position={[0, -0.1, 0.09]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         {/* Back Label Bottom */}
         <mesh position={[0, -0.1, -0.09]} rotation={[0, Math.PI, 0]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
       </group>
       
       {/* Top Part (Tears Off, keeps everything above y=0.7) */}
       <group ref={topSealRef}>
         <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#e0c5aa" roughness={0.95} bumpMap={bumpTex} bumpScale={0.04} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshStandardMaterial map={tex} color="#d4b496" roughness={0.9} bumpMap={bumpTex} bumpScale={0.01} side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </RoundedBox>
         {/* Front Label Top */}
         <mesh position={[0, -0.1, 0.09]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         {/* Back Label Top */}
         <mesh position={[0, -0.1, -0.09]} rotation={[0, Math.PI, 0]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshStandardMaterial map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         
         
@@ -324,9 +324,9 @@ function Pouch({ progress, tex, bumpTex, labelTex }: { progress: number, tex: TH
   );
 }
 
-function Film({ progress, filmBumpTex }: { progress: number, filmBumpTex: THREE.Texture | null }) {
+function Film({ progress, filmBumpTex, toonGradient }: { progress: number, filmBumpTex: THREE.Texture | null, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  const matRef = useRef<THREE.MeshToonMaterial>(null);
 
   useFrame(() => {
     if (!ref.current || !matRef.current) return;
@@ -353,23 +353,14 @@ function Film({ progress, filmBumpTex }: { progress: number, filmBumpTex: THREE.
     <mesh ref={ref} castShadow>
       {/* 5x5 perfectly flat sheet (scaled slightly relative to scene) */}
       <planeGeometry args={[1.5, 1.5, 32, 32]} />
-      <meshPhysicalMaterial 
-        ref={matRef} 
-        color="#f7f3ec" 
-        transmission={0.4} 
-        roughness={0.8} 
-        bumpMap={filmBumpTex}
-        bumpScale={0.05}
-        transparent 
-        side={THREE.DoubleSide} 
-      />
+      <meshToonMaterial gradientMap={toonGradient} ref={matRef} color="#f7f3ec" side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
     </mesh>
   );
 }
 
-function Glass({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
+function Glass({ progress, bumpTex, toonGradient }: { progress: number, bumpTex: THREE.Texture | null, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Group>(null);
-  const waterRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  const waterRef = useRef<THREE.MeshToonMaterial>(null);
     const waterMeshRef = useRef<THREE.Mesh>(null);
   
   const glassPoints = useMemo(() => {
@@ -432,37 +423,17 @@ function Glass({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture
     <group ref={ref}>
       <mesh castShadow receiveShadow>
         <latheGeometry args={[glassPoints, 64]} />
-        <meshPhysicalMaterial 
-          color="#ffffff" 
-          transmission={1} 
-          roughness={0.05}
-          ior={1.52} 
-          thickness={0.5}
-          clearcoat={1}
-          clearcoatRoughness={0.05}
-          bumpMap={bumpTex}
-          bumpScale={0.0005}
-          transparent 
-        />
+        <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh ref={waterMeshRef} position={[0, 0.001, 0]}>
         <latheGeometry args={[waterPoints, 64]} />
-        <meshPhysicalMaterial 
-          ref={waterRef}
-          color="#cde3d6" 
-          transmission={0.98} 
-          roughness={0.05} 
-          ior={1.33}
-          attenuationColor="#a9c9b5"
-          attenuationDistance={3}
-          transparent 
-        />
+        <meshToonMaterial gradientMap={toonGradient} ref={waterRef as any} color="#72b2f2" opacity={0.6} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
     </group>
   );
 }
 
-function Bottle({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
+function Bottle({ progress, bumpTex, toonGradient }: { progress: number, bumpTex: THREE.Texture | null, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Group>(null);
   const pumpRef = useRef<THREE.Group>(null);
   
@@ -508,47 +479,40 @@ function Bottle({ progress, bumpTex }: { progress: number, bumpTex: THREE.Textur
     <group ref={ref}>
       <mesh castShadow receiveShadow>
         <latheGeometry args={[bottlePoints, 64]} />
-        <meshPhysicalMaterial 
-          color="#f4f1eb" 
-          roughness={0.12} 
-          clearcoat={1} 
-          clearcoatRoughness={0.08} 
-          bumpMap={bumpTex}
-          bumpScale={0.0002}
-        />
+        <meshToonMaterial gradientMap={toonGradient} color="#f4f1eb" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       
       <group ref={pumpRef} position={[0, 0, 0]}>
         <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
           <cylinderGeometry args={[0.22, 0.22, 0.3, 64]} />
-          <meshStandardMaterial color="#d4d4d4" roughness={0.3} metalness={0.8} />
+          <meshToonMaterial gradientMap={toonGradient} color="#d4d4d4" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.15, 0]}>
           <cylinderGeometry args={[0.24, 0.24, 0.2, 64]} />
-          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.35, 0]}>
           <cylinderGeometry args={[0.2, 0.2, 0.3, 64]} />
-          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.5, 0]}>
           <sphereGeometry args={[0.2, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0.25, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
           <cylinderGeometry args={[0.08, 0.08, 0.2, 32]} />
-          <meshPhysicalMaterial color="#ffffff" roughness={0.2} clearcoat={1} />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0.36, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
           <cylinderGeometry args={[0.04, 0.04, 0.02, 32]} />
-          <meshStandardMaterial color="#333333" roughness={0.8} />
+          <meshToonMaterial gradientMap={toonGradient} color="#333333" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
       </group>
     </group>
   );
 }
 
-function Botanicals({ progress, bumpTex }: { progress: number, bumpTex: THREE.Texture | null }) {
+function Botanicals({ progress, bumpTex, toonGradient }: { progress: number, bumpTex: THREE.Texture | null, toonGradient: THREE.DataTexture }) {
   const ref = useRef<THREE.Group>(null);
   
   useFrame(() => {
@@ -564,19 +528,19 @@ function Botanicals({ progress, bumpTex }: { progress: number, bumpTex: THREE.Te
     <group ref={ref}>
       <mesh castShadow receiveShadow position={[-2, 0.4, 1]}>
         <sphereGeometry args={[0.4, 64, 64]} />
-        <meshStandardMaterial color="#eb7b28" roughness={0.6} bumpMap={bumpTex} bumpScale={0.015} />
+        <meshToonMaterial gradientMap={toonGradient} color="#eb7b28" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[-1.2, 0.3, 1.8]}>
         <sphereGeometry args={[0.3, 64, 64]} />
-        <meshStandardMaterial color="#40592e" roughness={0.8} bumpMap={bumpTex} bumpScale={0.03} />
+        <meshToonMaterial gradientMap={toonGradient} color="#40592e" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[2, 0.1, 1]} rotation={[Math.PI/2, 0.2, 0.5]}>
         <cylinderGeometry args={[0.1, 0.1, 1.5, 32]} />
-        <meshStandardMaterial color="#5c4033" roughness={1} bumpMap={bumpTex} bumpScale={0.08} />
+        <meshToonMaterial gradientMap={toonGradient} color="#5c4033" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[1.5, 0.05, 1.5]} rotation={[-Math.PI/2, 0, 0.3]}>
         <cylinderGeometry args={[0.3, 0.3, 0.02, 32, 1, false, 0, Math.PI]} />
-        <meshStandardMaterial color="#687d6d" roughness={0.7} bumpMap={bumpTex} bumpScale={0.002} />
+        <meshToonMaterial gradientMap={toonGradient} color="#687d6d" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
     </group>
   );
@@ -619,6 +583,19 @@ function CameraAdjuster() {
 }
 
 function Scene({ progress }: { progress: number }) {
+  const toonGradient = useMemo(() => {
+    const colors = new Uint8Array([
+      60, 60, 60, 255,
+      140, 140, 140, 255,
+      255, 255, 255, 255,
+    ]);
+    const gradientMap = new THREE.DataTexture(colors, 3, 1, THREE.RGBAFormat);
+    gradientMap.needsUpdate = true;
+    gradientMap.minFilter = THREE.NearestFilter;
+    gradientMap.magFilter = THREE.NearestFilter;
+    gradientMap.generateMipmaps = false;
+    return gradientMap;
+  }, []);
   const [mats, setMats] = useState<{ tex: THREE.Texture, bumpTex: THREE.Texture, pouchBumpTex: THREE.Texture, labelTex: THREE.Texture, filmBumpTex: THREE.Texture } | null>(null);
 
   useEffect(() => {
@@ -651,13 +628,13 @@ function Scene({ progress }: { progress: number }) {
       {mats && (
         <>
           <Float speed={1.2} rotationIntensity={0.015} floatIntensity={0.03}>
-            <Pouch progress={progress} tex={mats.tex} bumpTex={mats.pouchBumpTex} labelTex={mats.labelTex} />
-            <Film progress={progress} filmBumpTex={mats.filmBumpTex} />
-            <Glass progress={progress} bumpTex={mats.bumpTex} />
-            <Bottle progress={progress} bumpTex={mats.bumpTex} />
-            <WaterStream progress={progress} />
+            <Pouch progress={progress} toonGradient={toonGradient} tex={mats.tex} bumpTex={mats.pouchBumpTex} labelTex={mats.labelTex} />
+            <Film progress={progress} toonGradient={toonGradient} filmBumpTex={mats.filmBumpTex} />
+            <Glass progress={progress} toonGradient={toonGradient} bumpTex={mats.bumpTex} />
+            <Bottle progress={progress} toonGradient={toonGradient} bumpTex={mats.bumpTex} />
+            <WaterStream progress={progress} toonGradient={toonGradient} />
           </Float>
-          <Botanicals progress={progress} bumpTex={mats.bumpTex} />
+          <Botanicals progress={progress} toonGradient={toonGradient} bumpTex={mats.bumpTex} />
         </>
       )}
       
