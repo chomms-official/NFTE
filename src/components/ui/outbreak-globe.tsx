@@ -78,10 +78,16 @@ const MOSQUITO_DATA: Record<MosquitoType, {
   }
 };
 
-function getRiskColor(risk: number, opacity: number) {
-  if (risk >= 7.5) return `rgba(220, 38, 38, ${opacity})`; // Red
-  if (risk >= 4.5) return `rgba(249, 115, 22, ${opacity})`; // Orange
-  return `rgba(234, 179, 8, ${opacity})`; // Yellow
+function getRiskColor(risk: number) {
+  if (risk >= 7.5) return "#dc2626"; // Red
+  if (risk >= 4.5) return "#f97316"; // Orange
+  return "#eab308"; // Yellow
+}
+
+function getRiskColorRGBA(risk: number, opacity: number) {
+  if (risk >= 7.5) return `rgba(220, 38, 38, ${opacity})`;
+  if (risk >= 4.5) return `rgba(249, 115, 22, ${opacity})`;
+  return `rgba(234, 179, 8, ${opacity})`;
 }
 
 export default function OutbreakGlobe() {
@@ -201,13 +207,13 @@ export default function OutbreakGlobe() {
           
           // Polygons (Red, Orange, Yellow)
           polygonsData={countries}
-          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.006 : 0.002}
+          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.01 : 0.005}
           polygonCapColor={(d: any) => {
             if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "rgba(255, 255, 255, 0.9)"; 
-            return getRiskColor(d.properties.risk, 0.75);
+            return getRiskColor(d.properties.risk);
           }}
-          polygonSideColor={() => "transparent"}
-          polygonStrokeColor={() => "rgba(255,255,255,0.15)"}
+          polygonSideColor={() => "rgba(0, 0, 0, 0.05)"}
+          polygonStrokeColor={() => "rgba(255, 255, 255, 0.1)"}
           onPolygonClick={(d: any) => {
             setActiveCountry(d);
             if (globeEl.current) {
@@ -226,7 +232,7 @@ export default function OutbreakGlobe() {
           polygonLabel={(d: any) => `
             <div style="background: rgba(10,10,10,0.95); border: 1px solid #3f3f46; border-radius: 12px; padding: 12px; font-family: sans-serif; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
               <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN}</div>
-              <div style="color: ${getRiskColor(d.properties.risk, 1)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
+              <div style="color: ${getRiskColor(d.properties.risk)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
                 ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
               </div>
               <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view historical outbreak data</div>
@@ -320,7 +326,7 @@ export default function OutbreakGlobe() {
           <div className="flex items-center gap-4 mb-4 mt-4">
             {(() => {
               const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
-              return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk, 1) }} />;
+              return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
             })()}
             <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
               {activeCountry.properties.ADMIN}
@@ -331,9 +337,9 @@ export default function OutbreakGlobe() {
             <span 
               className="px-4 py-2 border rounded-full text-sm font-black uppercase tracking-widest"
               style={{ 
-                borderColor: getRiskColor(activeCountry.properties.risk, 0.5), 
-                color: getRiskColor(activeCountry.properties.risk, 1),
-                backgroundColor: getRiskColor(activeCountry.properties.risk, 0.1)
+                borderColor: getRiskColorRGBA(activeCountry.properties.risk, 0.5), 
+                color: getRiskColor(activeCountry.properties.risk),
+                backgroundColor: getRiskColorRGBA(activeCountry.properties.risk, 0.1)
               }}
             >
               Risk Level: {activeCountry.properties.risk.toFixed(1)} / 10
@@ -344,7 +350,7 @@ export default function OutbreakGlobe() {
           </div>
 
           <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></div>
+            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></div>
             
             <ContributionSkyline 
               data={countryData}
@@ -355,8 +361,8 @@ export default function OutbreakGlobe() {
               orbit={true}
               title={
                 <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></span>
-                  <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></span>
                   <span className="font-bold text-white tracking-widest uppercase text-xs">
                     {MOSQUITO_DATA[activeMosquito].name} Outbreak History
                   </span>
