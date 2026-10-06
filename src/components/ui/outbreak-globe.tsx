@@ -92,10 +92,15 @@ export default function OutbreakGlobe() {
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
 
+  const [windowHeight, setWindowHeight] = useState(800);
+
   // Responsive setup
   useEffect(() => {
     setMounted(true);
-    const handleResize = () => setWindowWidth(window.innerWidth);
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+      setWindowHeight(window.innerHeight);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     
@@ -183,26 +188,26 @@ export default function OutbreakGlobe() {
   if (!mounted) return null;
 
   return (
-    <div className="relative w-full h-[800px] flex items-center justify-center overflow-hidden rounded-2xl border border-zinc-800/80 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black shadow-2xl">
+    <div className="relative w-screen h-screen flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
       <div className="absolute inset-0 cursor-move">
         <Globe
           ref={globeEl}
-          width={windowWidth > 1400 ? 1400 : windowWidth - 40}
-          height={800}
+          width={windowWidth}
+          height={windowHeight}
           backgroundColor="rgba(0,0,0,0)"
           globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
           backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
           
           // Polygons (Red, Orange, Yellow)
           polygonsData={countries}
-          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.08 : 0.015}
+          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.006 : 0.002}
           polygonCapColor={(d: any) => {
             if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "rgba(255, 255, 255, 0.9)"; 
             return getRiskColor(d.properties.risk, 0.75);
           }}
-          polygonSideColor={(d: any) => getRiskColor(d.properties.risk, 0.2)}
-          polygonStrokeColor={() => "rgba(0,0,0,0.5)"}
+          polygonSideColor={() => "transparent"}
+          polygonStrokeColor={() => "rgba(255,255,255,0.15)"}
           onPolygonClick={(d: any) => {
             setActiveCountry(d);
             if (globeEl.current) {
@@ -238,7 +243,7 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* TOP CONTROLS: Mosquito Selectors */}
-      <div className="absolute top-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-3 bg-black/60 p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-10 w-max">
+      <div className="absolute top-4 sm:top-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar">
         {(Object.entries(MOSQUITO_DATA) as [MosquitoType, any][]).map(([key, data]) => {
           const isActive = activeMosquito === key;
           const Icon = data.icon;
@@ -247,18 +252,17 @@ export default function OutbreakGlobe() {
               key={key}
               onClick={() => {
                 setActiveMosquito(key);
-                setActiveCountry(null); // Reset selection on change
               }}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${
                 isActive 
-                  ? "bg-red-600/90 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-500 scale-105" 
+                  ? "bg-red-600/90 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-500 scale-100 sm:scale-105" 
                   : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 border border-transparent"
               }`}
             >
-              <Icon className={`w-5 h-5 ${isActive ? "animate-pulse" : ""}`} />
+              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isActive ? "animate-pulse" : ""}`} />
               <div className="flex flex-col items-start text-left">
                 <span className="leading-none">{data.name}</span>
-                <span className={`text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
+                <span className={`text-[8px] sm:text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
                   {data.diseases.split(",")[0]}
                 </span>
               </div>
@@ -268,7 +272,7 @@ export default function OutbreakGlobe() {
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
-      <div className="absolute bottom-6 left-6 bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+      <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl scale-90 sm:scale-100 origin-bottom-left">
         <h4 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
           <ActivityIcon className="w-4 h-4 text-red-500" /> 
           Risk Heatmap (Live)
@@ -290,7 +294,7 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* Selected Disease Info - Bottom Right */}
-      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl hidden sm:block">
         <h4 className="text-white font-black text-sm uppercase tracking-widest mb-2 border-b border-white/10 pb-2">
           {MOSQUITO_DATA[activeMosquito].name} Vectors
         </h4>
