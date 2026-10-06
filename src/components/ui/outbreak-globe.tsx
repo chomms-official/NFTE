@@ -106,8 +106,51 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
+  const [flightPath, setFlightPath] = useState<any>(null);
+  const flightTimerRef = useRef<any>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
+
+  const handleSelectCountry = (countryFeature: any) => {
+    if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
+    
+    // Get current view for flight start
+    let startLat = 0;
+    let startLng = 0;
+    if (globeEl.current) {
+      const pov = globeEl.current.pointOfView();
+      startLat = pov.lat;
+      startLng = pov.lng;
+    }
+    
+    // Calculate destination
+    let pt = countryFeature.geometry.coordinates;
+    while (pt && Array.isArray(pt[0])) pt = pt[0];
+    const destLng = pt[0] || 0;
+    const destLat = pt[1] || 0;
+    
+    setFlightPath({
+      startLat,
+      startLng,
+      endLat: destLat,
+      endLng: destLng,
+    });
+
+    // Hide modal instantly
+    setActiveCountry(null);
+
+    if (globeEl.current) {
+      globeEl.current.controls().autoRotate = false;
+      const offsetLng = window.innerWidth > 768 ? 25 : 0;
+      globeEl.current.pointOfView({ lat: destLat, lng: destLng + offsetLng, altitude: 1.5 }, 1500);
+    }
+    
+    // Wait for flight to finish before showing modal
+    flightTimerRef.current = setTimeout(() => {
+      setActiveCountry(countryFeature);
+      setFlightPath(null); // Clear flight path after arriving
+    }, 1500);
+  };
 
   // --- TOUR MODE (ATTRACT MODE) ---
   const [isIdle, setIsIdle] = useState(false);
@@ -148,19 +191,6 @@ export default function OutbreakGlobe() {
       return;
     }
 
-    const focusCountry = (countryFeature: any) => {
-      setActiveCountry(countryFeature);
-      if (globeEl.current) {
-        globeEl.current.controls().autoRotate = false;
-        let pt = countryFeature.geometry.coordinates;
-        while (pt && Array.isArray(pt[0])) pt = pt[0];
-        const centerLng = pt[0] || 0;
-        const centerLat = pt[1] || 0;
-        const offsetLng = window.innerWidth > 768 ? 25 : 0;
-        globeEl.current.pointOfView({ lat: centerLat, lng: centerLng + offsetLng, altitude: 1.5 }, 1000);
-      }
-    };
-
     const startTourCycle = () => {
       const currentMosquito = tourMosquitoOrder[tourMosquitoIndexRef.current];
       setActiveMosquito(currentMosquito);
@@ -182,7 +212,7 @@ export default function OutbreakGlobe() {
       tourCountryIndexRef.current = 0;
       
       if (tourCountriesRef.current.length > 0) {
-        focusCountry(tourCountriesRef.current[0]);
+        handleSelectCountry(tourCountriesRef.current[0]);
       }
     };
 
@@ -192,7 +222,7 @@ export default function OutbreakGlobe() {
         tourMosquitoIndexRef.current = (tourMosquitoIndexRef.current + 1) % tourMosquitoOrder.length;
         startTourCycle();
       } else {
-        focusCountry(tourCountriesRef.current[tourCountryIndexRef.current]);
+        handleSelectCountry(tourCountriesRef.current[tourCountryIndexRef.current]);
       }
     };
 
@@ -334,6 +364,20 @@ export default function OutbreakGlobe() {
           globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
           backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
           
+          // Flight Path (Arc)
+          arcsData={flightPath ? [flightPath] : []}
+          arcStartLat={(d: any) => d.startLat}
+          arcStartLng={(d: any) => d.startLng}
+          arcEndLat={(d: any) => d.endLat}
+          arcEndLng={(d: any) => d.endLng}
+          arcColor={(d: any) => ['rgba(255, 255, 255, 0)', '#ffffff']}
+          arcAltitude={(d: any) => 0.5}
+          arcDashLength={0.15}
+          arcDashGap={2}
+          arcDashInitialGap={() => 1}
+          arcDashAnimateTime={1500}
+          arcStroke={1.5}
+
           // Polygons (Red, Orange, Yellow)
           polygonsTransitionDuration={0}
           polygonsData={countries}
@@ -351,21 +395,7 @@ export default function OutbreakGlobe() {
             return getRiskColor(d.properties.risk);
           }}
           polygonStrokeColor={() => "#111111"}
-          onPolygonClick={(d: any) => {
-            setActiveCountry(d);
-            if (globeEl.current) {
-              globeEl.current.controls().autoRotate = false;
-              // Point to the clicked country
-              let pt = d.geometry.coordinates;
-              while (pt && Array.isArray(pt[0])) pt = pt[0];
-              const centerLng = pt[0] || 0;
-              const centerLat = pt[1] || 0;
-              // Offset lng so country shifts left, making room for the modal on the right
-              // Adding longitude moves the camera East, so the country appears West (Left) on screen
-              const offsetLng = window.innerWidth > 768 ? 25 : 0;
-              globeEl.current.pointOfView({ lat: centerLat, lng: centerLng + offsetLng, altitude: 1.5 }, 1000);
-            }
-          }}
+          onPolygonClick={(d: any) => handleSelectCountry(d)}
           onPolygonHover={(d) => {
             if (globeEl.current && !activeCountry) {
               globeEl.current.controls().autoRotate = !d;
