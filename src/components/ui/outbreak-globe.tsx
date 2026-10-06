@@ -706,29 +706,35 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute bottom-0 md:top-0 right-0 h-[85vh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 rounded-t-3xl md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl p-4 pt-16 md:pt-24 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
-          <button 
-            onClick={() => {
-              setActiveCountry(null);
-              if (globeEl.current) {
-                globeEl.current.controls().autoRotate = true;
-                globeEl.current.controls().autoRotateSpeed = 0.15;
-              }
-            }}
-            className="absolute top-4 right-4 sm:top-8 sm:right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10 z-[70]"
-          >
-            <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-
-          <div className="flex items-center gap-4 mb-4 mt-2 sm:mt-4">
-            {(() => {
-              const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
-              return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
-            })()}
-            <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
-              {activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}
-            </h2>
+        <div className="absolute bottom-0 md:top-0 right-0 h-[85dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 rounded-t-3xl md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
+          
+          {/* Fixed Header with Close Button */}
+          <div className="flex justify-end p-4 pt-6 md:p-8 shrink-0">
+            <button 
+              onClick={() => {
+                setActiveCountry(null);
+                if (globeEl.current) {
+                  globeEl.current.controls().autoRotate = true;
+                  globeEl.current.controls().autoRotateSpeed = 0.15;
+                }
+              }}
+              className="p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10"
+            >
+              <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
           </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-10 md:pb-10 pt-0 no-scrollbar">
+            <div className="flex items-center gap-4 mb-4 mt-2 sm:mt-0">
+              {(() => {
+                const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
+                return <Icon className="w-10 h-10 shrink-0" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
+              })()}
+              <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
+                {activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}
+              </h2>
+            </div>
           
           <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-6 sm:mb-10">
             <span 
@@ -790,6 +796,7 @@ export default function OutbreakGlobe() {
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   );
