@@ -153,18 +153,26 @@ export default function OutbreakGlobe() {
 
   const [windowHeight, setWindowHeight] = useState(800);
 
-  const handleSelectCountry = (countryFeature: any) => {
+  const cancelFlight = () => {
     if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     
-    // Clean up previous trail to prevent memory leaks / visual artifacts if clicked rapidly
-    if (trailLineRef.current && globeEl.current) {
+    if (globeEl.current) {
       const scene = globeEl.current.scene();
-      scene.remove(trailLineRef.current);
-      if (trailLineRef.current.geometry) trailLineRef.current.geometry.dispose();
-      if (trailLineRef.current.material) (trailLineRef.current.material as THREE.Material).dispose();
-      trailLineRef.current = null;
+      if (airplaneMeshRef.current) {
+        scene.remove(airplaneMeshRef.current);
+      }
+      if (trailLineRef.current) {
+        scene.remove(trailLineRef.current);
+        if (trailLineRef.current.geometry) trailLineRef.current.geometry.dispose();
+        if (trailLineRef.current.material) (trailLineRef.current.material as THREE.Material).dispose();
+        trailLineRef.current = null;
+      }
     }
+  };
+
+  const handleSelectCountry = (countryFeature: any) => {
+    cancelFlight();
     
     // Calculate destination
     let pt = countryFeature.geometry?.coordinates;
@@ -317,8 +325,8 @@ export default function OutbreakGlobe() {
   // 1. Detect User Interaction to turn off tour
   useEffect(() => {
     const handleInteraction = (e: Event) => {
-      // Ignore clicks on buttons so the user can toggle the tour button itself
-      if ((e.target as HTMLElement).closest('button')) return;
+      // Ignore clicks on the Autopilot toggle button itself
+      if ((e.target as HTMLElement).closest('#auto-tour-btn')) return;
       setAutoTourEnabled(false);
     };
 
@@ -333,9 +341,12 @@ export default function OutbreakGlobe() {
   useEffect(() => {
     if (!autoTourEnabled || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
-      // When user interrupts tour, reset rotation (unless they are interacting with a country)
-      if (!autoTourEnabled && globeEl.current && !activeCountry) {
-        globeEl.current.controls().autoRotate = true;
+      // When user interrupts tour, reset rotation and cancel flights
+      if (!autoTourEnabled) {
+        cancelFlight(); // Immediately stop the airplane if it was mid-flight during autopilot
+        if (globeEl.current && !activeCountry) {
+          globeEl.current.controls().autoRotate = true;
+        }
       }
       return;
     }
@@ -413,7 +424,10 @@ export default function OutbreakGlobe() {
         setGeoJsonData(cleanedFeatures);
       });
       
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelFlight();
+    };
   }, []);
 
   // Compute countries with currently selected mosquito risk data
@@ -613,11 +627,12 @@ export default function OutbreakGlobe() {
         })}
       </div>
 
-      {/* Auto Tour Toggle */}
+      {/* Autopilot Toggle */}
       <div className={`absolute top-20 sm:top-28 z-[60] transition-all duration-500 ${
         activeCountry ? "left-4 sm:left-6 transform-none" : "left-1/2 transform -translate-x-1/2"
       }`}>
         <button
+          id="auto-tour-btn"
           onClick={() => {
             setAutoTourEnabled(!autoTourEnabled);
             if (activeCountry) {
@@ -633,11 +648,11 @@ export default function OutbreakGlobe() {
           {autoTourEnabled ? (
             <>
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]"></span>
-              Auto Tour Active
+              Autopilot Active
             </>
           ) : (
             <>
-              ▶ Start Auto Tour
+              ▶ Start Autopilot
             </>
           )}
         </button>
