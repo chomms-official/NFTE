@@ -203,7 +203,7 @@ export default function OutbreakGlobe() {
       
       // Calculate flight duration dynamically so it doesn't look too fast if going around the whole globe
       const lngDiff = endLng - startLng;
-      const flightDuration = Math.max(1500, (lngDiff / 360) * 3500); 
+      const flightDuration = Math.max(3000, (lngDiff / 360) * 5000); 
       
       globeEl.current.pointOfView({ lat: endLat + offsetLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
       
@@ -307,39 +307,34 @@ export default function OutbreakGlobe() {
   };
 
   // --- TOUR MODE (ATTRACT MODE) ---
-  const [isIdle, setIsIdle] = useState(false);
-  const idleTimerRef = useRef<any>(null);
+  const [autoTourEnabled, setAutoTourEnabled] = useState(true);
   const tourIntervalRef = useRef<any>(null);
   const tourMosquitoOrder: MosquitoType[] = ["aedes", "anopheles", "culex"];
   const tourMosquitoIndexRef = useRef(0);
   const tourCountryIndexRef = useRef(0);
   const tourCountriesRef = useRef<any[]>([]);
 
-  // 1. Detect Idle Time
+  // 1. Detect User Interaction to turn off tour
   useEffect(() => {
-    const resetIdle = () => {
-      setIsIdle(false);
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => {
-        setIsIdle(true);
-      }, 5000);
+    const handleInteraction = (e: Event) => {
+      // Ignore clicks on buttons so the user can toggle the tour button itself
+      if ((e.target as HTMLElement).closest('button')) return;
+      setAutoTourEnabled(false);
     };
 
-    resetIdle();
-    const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'wheel', 'click'];
-    events.forEach(e => window.addEventListener(e, resetIdle, { passive: true }));
+    const events = ['mousedown', 'touchstart', 'wheel'];
+    events.forEach(e => window.addEventListener(e, handleInteraction, { passive: true }));
     return () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      events.forEach(e => window.removeEventListener(e, resetIdle));
+      events.forEach(e => window.removeEventListener(e, handleInteraction));
     };
   }, []);
 
   // 2. Handle Tour Loop
   useEffect(() => {
-    if (!isIdle || geoJsonData.length === 0) {
+    if (!autoTourEnabled || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
       // When user interrupts tour, reset rotation (unless they are interacting with a country)
-      if (!isIdle && globeEl.current && !activeCountry) {
+      if (!autoTourEnabled && globeEl.current && !activeCountry) {
         globeEl.current.controls().autoRotate = true;
       }
       return;
@@ -380,17 +375,17 @@ export default function OutbreakGlobe() {
       }
     };
 
-    // First time entering idle => start at aedes
+    // First time entering tour => start at aedes
     tourMosquitoIndexRef.current = 0;
     startTourCycle();
     
-    // Give time to read before switching
-    tourIntervalRef.current = setInterval(nextTourStep, 6000);
+    // Give time to read before switching (flight takes ~3s, read for ~5s = 8000ms)
+    tourIntervalRef.current = setInterval(nextTourStep, 8000);
 
     return () => {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
     };
-  }, [isIdle, geoJsonData]);
+  }, [autoTourEnabled, geoJsonData]);
 
   // Responsive setup
   useEffect(() => {
@@ -616,6 +611,36 @@ export default function OutbreakGlobe() {
             </button>
           );
         })}
+      </div>
+
+      {/* Auto Tour Toggle */}
+      <div className={`absolute top-20 sm:top-28 z-[60] transition-all duration-500 ${
+        activeCountry ? "left-4 sm:left-6 transform-none" : "left-1/2 transform -translate-x-1/2"
+      }`}>
+        <button
+          onClick={() => {
+            setAutoTourEnabled(!autoTourEnabled);
+            if (activeCountry) {
+              setActiveCountry(null);
+            }
+          }}
+          className={`flex items-center justify-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 rounded-full font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 backdrop-blur-md ${
+            autoTourEnabled
+              ? "bg-black/40 text-red-400 border border-red-500/30 hover:bg-black/60 shadow-[0_0_15px_rgba(220,38,38,0.2)]"
+              : "bg-white/10 text-white border border-white/20 hover:bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+          }`}
+        >
+          {autoTourEnabled ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]"></span>
+              Auto Tour Active
+            </>
+          ) : (
+            <>
+              ▶ Start Auto Tour
+            </>
+          )}
+        </button>
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
