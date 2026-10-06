@@ -708,11 +708,11 @@ export default function OutbreakGlobe() {
     const popStr = activeCountry.properties.POP_EST || activeCountry.properties.POP_EST_ || 0;
     const population = Number(popStr) || 1000000;
     
-    // A risk of 10 means 10% of the population gets infected over the year.
-    // A risk of 5 means (0.5^3) * 10% = 1.25% of the population gets infected.
-    // This prevents impossible scenarios where cases exceed population.
+    // Scale cases realistically: higher risk = more cases, proportional to population.
+    // Use a gentler power (1.8) so even low-risk countries show meaningful surveillance data.
+    // Minimum of 50 yearly cases to represent imported/sporadic cases even in low-risk areas.
     const rawYearlySum = raw.reduce((acc, d) => acc + d.count, 0) || 2000;
-    const targetYearlyCases = population * Math.pow((risk / 10), 3) * 0.10;
+    const targetYearlyCases = Math.max(50, population * Math.pow((risk / 10), 1.8) * 0.08);
     const riskMultiplier = targetYearlyCases / rawYearlySum;
 
     return raw.map((d) => ({
