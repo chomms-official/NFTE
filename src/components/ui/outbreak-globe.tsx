@@ -322,25 +322,24 @@ export default function OutbreakGlobe() {
   const tourCountryIndexRef = useRef(0);
   const tourCountriesRef = useRef<any[]>([]);
 
-  // 1. Detect User Interaction to turn off tour
+  // 1. Detect User Interaction to turn off tour (Only on the globe itself!)
   useEffect(() => {
-    const handleInteraction = (e: Event) => {
-      // Ignore clicks on the Autopilot toggle button itself
-      if ((e.target as HTMLElement).closest('#auto-tour-btn')) return;
-      
+    const handleInteraction = () => {
+      if (!autoTourEnabled) return;
       // If we are interrupting, cancel any mid-air autopilot flight immediately
-      // Do this here instead of in the effect to prevent race conditions with manual country clicks!
       cancelFlight();
-      
       setAutoTourEnabled(false);
     };
 
+    const globeContainer = document.getElementById('globe-container');
+    if (!globeContainer) return;
+
     const events = ['mousedown', 'touchstart', 'wheel'];
-    events.forEach(e => window.addEventListener(e, handleInteraction, { passive: true }));
+    events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true }));
     return () => {
-      events.forEach(e => window.removeEventListener(e, handleInteraction));
+      events.forEach(e => globeContainer.removeEventListener(e, handleInteraction));
     };
-  }, []);
+  }, [autoTourEnabled]);
 
   // 2. Handle Tour Loop
   useEffect(() => {
@@ -520,7 +519,7 @@ export default function OutbreakGlobe() {
   return (
     <div className="relative w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
-      <div className="absolute inset-0 cursor-move">
+      <div id="globe-container" className="absolute inset-0 cursor-move">
         <Globe
           ref={globeEl}
           width={windowWidth}
@@ -610,6 +609,10 @@ export default function OutbreakGlobe() {
               key={key}
               onClick={() => {
                 setActiveMosquito(key);
+                if (autoTourEnabled) {
+                  cancelFlight();
+                  setAutoTourEnabled(false);
+                }
               }}
               className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap shrink-0 ${
                 isActive 
