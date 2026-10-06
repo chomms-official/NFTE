@@ -20,13 +20,17 @@ const MOSQUITO_DATA: Record<MosquitoType, {
   name: string;
   diseases: string;
   icon: any;
+  sourceName: string;
+  sourceUrl: string;
   riskMap: Record<string, number>;
   hotspots: Array<{lat: number, lng: number, city: string, weight: number}>;
 }> = {
   aedes: {
     name: "AEDES",
     diseases: "Dengue, Chikungunya, Zika, Yellow Fever",
-    icon: DropletsIcon, // Represents blood/tropical rain
+    icon: DropletsIcon,
+    sourceName: "WHO Dengue Factsheet",
+    sourceUrl: "https://www.who.int/news-room/fact-sheets/detail/dengue-and-severe-dengue",
     riskMap: {
       "Brazil": 9.8, "India": 9.5, "Indonesia": 9.2, "Philippines": 8.8,
       "Thailand": 8.5, "Vietnam": 8.1, "Bangladesh": 8.0, "Colombia": 7.9, 
@@ -35,16 +39,18 @@ const MOSQUITO_DATA: Record<MosquitoType, {
       "United States of America": 3.5,
     },
     hotspots: [
-      { lat: -23.5505, lng: -46.6333, city: "São Paulo, Brazil", weight: 9.8 },
-      { lat: 13.7563, lng: 100.5018, city: "Bangkok, Thailand", weight: 8.5 },
-      { lat: -6.2088, lng: 106.8456, city: "Jakarta, Indonesia", weight: 9.2 },
-      { lat: 14.5995, lng: 120.9842, city: "Manila, Philippines", weight: 8.8 },
+      { lat: -23.5505, lng: -46.6333, city: "SÃO PAULO, BRAZIL", weight: 9.8 },
+      { lat: 13.7563, lng: 100.5018, city: "BANGKOK, THAILAND", weight: 8.5 },
+      { lat: -6.2088, lng: 106.8456, city: "JAKARTA, INDONESIA", weight: 9.2 },
+      { lat: 14.5995, lng: 120.9842, city: "MANILA, PHILIPPINES", weight: 8.8 },
     ]
   },
   anopheles: {
     name: "ANOPHELES",
     diseases: "Malaria",
     icon: BugIcon,
+    sourceName: "WHO World Malaria Report",
+    sourceUrl: "https://www.who.int/teams/global-malaria-programme/reports/world-malaria-report-2023",
     riskMap: {
       "Nigeria": 9.9, "Democratic Republic of the Congo": 9.8, "Uganda": 9.5, 
       "Mozambique": 9.2, "Angola": 8.9, "Burkina Faso": 8.7, "Mali": 8.5,
@@ -53,16 +59,18 @@ const MOSQUITO_DATA: Record<MosquitoType, {
       "United States of America": 0.5, "China": 1.0, "Thailand": 3.0, "Argentina": 1.0
     },
     hotspots: [
-      { lat: 9.0820, lng: 8.6753, city: "Abuja, Nigeria", weight: 9.9 },
-      { lat: -4.3224, lng: 15.3070, city: "Kinshasa, DRC", weight: 9.8 },
-      { lat: 0.3476, lng: 32.5825, city: "Kampala, Uganda", weight: 9.5 },
-      { lat: -25.9692, lng: 32.5732, city: "Maputo, Mozambique", weight: 9.2 },
+      { lat: 9.0820, lng: 8.6753, city: "ABUJA, NIGERIA", weight: 9.9 },
+      { lat: -4.3224, lng: 15.3070, city: "KINSHASA, DRC", weight: 9.8 },
+      { lat: 0.3476, lng: 32.5825, city: "KAMPALA, UGANDA", weight: 9.5 },
+      { lat: -25.9692, lng: 32.5732, city: "MAPUTO, MOZAMBIQUE", weight: 9.2 },
     ]
   },
   culex: {
     name: "CULEX",
     diseases: "Japanese Encephalitis (JE), West Nile Virus",
-    icon: WindIcon, // Represents airborne/widespread
+    icon: WindIcon,
+    sourceName: "CDC West Nile / WHO JE",
+    sourceUrl: "https://www.cdc.gov/west-nile-virus/index.html",
     riskMap: {
       "United States of America": 7.5, "China": 8.0, "India": 8.5, "Italy": 6.5,
       "Greece": 6.0, "Egypt": 6.5, "Vietnam": 7.8, "Thailand": 7.5, 
@@ -340,14 +348,25 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* Selected Disease Info - Bottom Right */}
-      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl hidden sm:block">
+      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl hidden sm:block">
         <h4 className="text-white font-black text-sm uppercase tracking-widest mb-2 border-b border-white/10 pb-2">
           {MOSQUITO_DATA[activeMosquito].name} Vectors
         </h4>
-        <p className="text-xs text-zinc-400 leading-relaxed">
+        <p className="text-xs text-zinc-400 leading-relaxed mb-3">
           Primarily responsible for transmitting <strong className="text-zinc-200">{MOSQUITO_DATA[activeMosquito].diseases}</strong>. 
           The data points highlight current highly active global breeding clusters.
         </p>
+        <a 
+          href={MOSQUITO_DATA[activeMosquito].sourceUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-300 transition-colors underline underline-offset-2 decoration-red-900/50"
+        >
+          Source: {MOSQUITO_DATA[activeMosquito].sourceName}
+          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
       </div>
 
       {/* Country Data Modal / Overlay */}
@@ -412,11 +431,25 @@ export default function OutbreakGlobe() {
             />
           </div>
 
-          <div className="mt-10 text-zinc-400 text-sm leading-relaxed border-t border-white/10 pt-8 max-w-2xl">
-            <p>
+          <div className="mt-10 text-zinc-400 text-xs sm:text-sm leading-relaxed border-t border-white/10 pt-6 sm:pt-8 max-w-2xl">
+            <p className="mb-3">
               This historical data visualization represents the recorded <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN}</strong> over the past 12 months. 
               The 3D skyline map highlights severe spikes and seasonal trends corresponding to mosquito breeding seasons.
             </p>
+            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-500">Data Source:</span>
+              <a 
+                href={MOSQUITO_DATA[activeMosquito].sourceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[10px] sm:text-xs font-medium text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 underline underline-offset-2 decoration-red-900/50"
+              >
+                {MOSQUITO_DATA[activeMosquito].sourceName}
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       )}
