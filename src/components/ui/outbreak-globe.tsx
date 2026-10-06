@@ -632,7 +632,9 @@ export default function OutbreakGlobe() {
 
       {/* TOP CONTROLS: Mosquito Selectors */}
       <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
-        activeCountry ? "left-4 sm:left-6 transform-none" : "left-1/2 transform -translate-x-1/2"
+        activeCountry 
+          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto" 
+          : "left-1/2 transform -translate-x-1/2 opacity-100"
       }`}>
         {(Object.entries(MOSQUITO_DATA) as [MosquitoType, any][]).map(([key, data]) => {
           const isActive = activeMosquito === key;
@@ -667,7 +669,9 @@ export default function OutbreakGlobe() {
 
       {/* Autopilot Toggle */}
       <div className={`absolute top-20 sm:top-28 z-[60] transition-all duration-500 ${
-        activeCountry ? "left-4 sm:left-6 transform-none" : "left-1/2 transform -translate-x-1/2"
+        activeCountry 
+          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto" 
+          : "left-1/2 transform -translate-x-1/2 opacity-100"
       }`}>
         <button
           id="auto-tour-btn"
