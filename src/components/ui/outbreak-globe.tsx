@@ -71,11 +71,66 @@ const MOSQUITO_DATA: Record<MosquitoType, {
     sourceName: "WHO Dengue Factsheet",
     sourceUrl: "https://www.who.int/news-room/fact-sheets/detail/dengue-and-severe-dengue",
     riskMap: {
+      // Southeast Asia & South Asia (highest global dengue burden)
       "Brazil": 9.8, "India": 9.5, "Indonesia": 9.2, "Philippines": 8.8,
-      "Thailand": 8.5, "Vietnam": 8.1, "Bangladesh": 8.0, "Colombia": 7.9, 
+      "Thailand": 8.5, "Vietnam": 8.1, "Bangladesh": 8.0, "Colombia": 7.9,
       "Nigeria": 7.5, "Democratic Republic of the Congo": 7.0, "Mexico": 6.8,
       "Malaysia": 7.2, "Argentina": 6.2, "Pakistan": 5.5, "Saudi Arabia": 5.0,
       "United States of America": 3.5,
+      // Americas
+      "Venezuela": 8.5, "Peru": 7.6, "Ecuador": 7.4, "Bolivia": 7.0,
+      "Paraguay": 7.8, "Honduras": 7.5, "Guatemala": 7.2, "El Salvador": 7.0,
+      "Nicaragua": 7.3, "Costa Rica": 6.5, "Panama": 6.8, "Cuba": 5.8,
+      "Dominican Republic": 6.5, "Haiti": 7.0, "Jamaica": 5.0, "Puerto Rico": 6.5,
+      "Trinidad and Tobago": 5.8, "Guyana": 6.0, "Suriname": 5.5, "Belize": 5.2,
+      "The Bahamas": 3.5, "Uruguay": 2.8, "Chile": 1.5, "Canada": 0.5,
+      "Falkland Islands": 0.1,
+      // Africa
+      "Kenya": 7.0, "United Republic of Tanzania": 7.2, "Mozambique": 6.8,
+      "Angola": 6.5, "Cameroon": 6.2, "Ghana": 6.0, "Ivory Coast": 6.5,
+      "Senegal": 6.0, "Burkina Faso": 5.8, "Mali": 5.5, "Guinea": 5.5,
+      "Sierra Leone": 5.2, "Liberia": 5.0, "Benin": 5.5, "Togo": 5.3,
+      "Niger": 4.5, "Chad": 4.2, "Central African Republic": 5.0,
+      "Republic of the Congo": 6.0, "Gabon": 5.5, "Equatorial Guinea": 5.0,
+      "Uganda": 6.5, "Rwanda": 5.0, "Burundi": 5.2, "Ethiopia": 5.5,
+      "Somalia": 4.8, "Somaliland": 4.5, "Djibouti": 4.8, "Eritrea": 4.0,
+      "Sudan": 5.5, "South Sudan": 5.8, "Madagascar": 6.0, "Malawi": 5.5,
+      "Zambia": 5.0, "Zimbabwe": 4.5, "Botswana": 3.0, "Namibia": 2.5,
+      "South Africa": 3.5, "Lesotho": 1.0, "Swaziland": 2.0,
+      "Mauritania": 3.5, "Western Sahara": 1.5, "Gambia": 5.0,
+      "Guinea-Bissau": 5.0, "Libya": 2.0, "Tunisia": 2.5, "Algeria": 2.0,
+      "Morocco": 2.5, "Egypt": 3.5,
+      // Asia & Oceania
+      "China": 5.5, "Myanmar": 7.5, "Cambodia": 7.8, "Laos": 7.2,
+      "Sri Lanka": 7.5, "Nepal": 6.0, "Bhutan": 4.5, "Taiwan": 5.0,
+      "Japan": 2.5, "South Korea": 2.0, "North Korea": 2.5,
+      "Papua New Guinea": 7.0, "Solomon Islands": 6.5, "Vanuatu": 5.5,
+      "Fiji": 6.0, "New Caledonia": 4.5, "East Timor": 7.0,
+      "Australia": 3.5, "New Zealand": 0.5, "Mongolia": 0.5,
+      "Afghanistan": 4.5, "Iran": 3.5, "Iraq": 3.0, "Syria": 2.5,
+      "Jordan": 1.5, "Lebanon": 1.5, "Israel": 2.0, "Palestine": 1.8,
+      "Turkey": 2.5, "Yemen": 5.5, "Oman": 3.0, "United Arab Emirates": 2.5,
+      "Qatar": 2.0, "Kuwait": 1.5, "Brunei": 4.5,
+      // Central Asia
+      "Kazakhstan": 1.0, "Uzbekistan": 1.5, "Turkmenistan": 1.2,
+      "Tajikistan": 1.5, "Kyrgyzstan": 1.0,
+      // Europe (very low - occasional imported/autochthonous cases)
+      "France": 2.0, "Spain": 2.0, "Portugal": 1.8, "Italy": 2.5,
+      "Greece": 1.8, "Croatia": 1.5, "Germany": 0.8, "United Kingdom": 0.5,
+      "Netherlands": 0.5, "Belgium": 0.5, "Austria": 0.5, "Switzerland": 0.5,
+      "Poland": 0.3, "Czechia": 0.3, "Slovakia": 0.3, "Hungary": 0.5,
+      "Romania": 0.8, "Bulgaria": 0.8, "Republic of Serbia": 0.5,
+      "Bosnia and Herzegovina": 0.5, "Montenegro": 0.5, "Kosovo": 0.5,
+      "Macedonia": 0.5, "Albania": 0.8, "Moldova": 0.3, "Ukraine": 0.5,
+      "Belarus": 0.3, "Russia": 1.0, "Georgia": 0.8, "Armenia": 0.5,
+      "Azerbaijan": 0.8, "Cyprus": 1.0, "Northern Cyprus": 1.0,
+      "Slovenia": 0.3, "Luxembourg": 0.3,
+      // Nordics
+      "Sweden": 0.2, "Norway": 0.2, "Finland": 0.2, "Denmark": 0.3,
+      "Iceland": 0.1, "Estonia": 0.2, "Latvia": 0.2, "Lithuania": 0.2,
+      "Ireland": 0.3, "Greenland": 0.1,
+      // Polar
+      "Antarctica": 0.0, "French Southern and Antarctic Lands": 0.0,
     },
     hotspots: [
       { lat: -23.5505, lng: -46.6333, city: "SÃO PAULO, BRAZIL", weight: 9.8 },
@@ -91,11 +146,64 @@ const MOSQUITO_DATA: Record<MosquitoType, {
     sourceName: "WHO World Malaria Report",
     sourceUrl: "https://www.who.int/teams/global-malaria-programme/reports/world-malaria-report-2023",
     riskMap: {
-      "Nigeria": 9.9, "Democratic Republic of the Congo": 9.8, "Uganda": 9.5, 
+      // Sub-Saharan Africa (highest global malaria burden - ~95% of deaths)
+      "Nigeria": 9.9, "Democratic Republic of the Congo": 9.8, "Uganda": 9.5,
       "Mozambique": 9.2, "Angola": 8.9, "Burkina Faso": 8.7, "Mali": 8.5,
       "India": 7.8, "Papua New Guinea": 8.0, "Brazil": 6.5, "Colombia": 5.5,
       "Pakistan": 6.0, "Indonesia": 6.5, "Myanmar": 7.0,
-      "United States of America": 0.5, "China": 1.0, "Thailand": 3.0, "Argentina": 1.0
+      "United States of America": 0.5, "China": 1.0, "Thailand": 3.0, "Argentina": 1.0,
+      // More Africa
+      "Niger": 8.8, "Cameroon": 8.5, "Ghana": 8.2, "Ivory Coast": 8.0,
+      "United Republic of Tanzania": 8.8, "Kenya": 7.5, "Senegal": 7.5,
+      "Guinea": 8.0, "Sierra Leone": 8.2, "Liberia": 7.8, "Benin": 7.5,
+      "Togo": 7.2, "Chad": 8.0, "Central African Republic": 8.5,
+      "Republic of the Congo": 7.8, "Gabon": 7.0, "Equatorial Guinea": 7.5,
+      "Rwanda": 7.0, "Burundi": 7.5, "Ethiopia": 7.0, "South Sudan": 9.0,
+      "Sudan": 6.5, "Somalia": 7.0, "Somaliland": 6.5, "Djibouti": 5.0,
+      "Eritrea": 6.0, "Madagascar": 7.5, "Malawi": 8.0, "Zambia": 7.8,
+      "Zimbabwe": 6.0, "Botswana": 3.5, "Namibia": 4.0, "South Africa": 3.0,
+      "Swaziland": 2.5, "Lesotho": 0.5, "Gambia": 7.5, "Guinea-Bissau": 7.0,
+      "Mauritania": 5.5, "Western Sahara": 1.0,
+      // Americas
+      "Venezuela": 5.0, "Peru": 5.5, "Ecuador": 4.5, "Bolivia": 4.0,
+      "Paraguay": 3.0, "Honduras": 4.5, "Guatemala": 4.0, "El Salvador": 3.0,
+      "Nicaragua": 3.5, "Costa Rica": 2.5, "Panama": 3.5, "Cuba": 1.0,
+      "Dominican Republic": 2.5, "Haiti": 5.5, "Jamaica": 1.0, "Mexico": 3.0,
+      "Guyana": 5.0, "Suriname": 4.0, "Belize": 3.0, "Puerto Rico": 1.0,
+      "Trinidad and Tobago": 1.5, "The Bahamas": 0.8, "Uruguay": 0.3,
+      "Chile": 0.2, "Canada": 0.2, "Falkland Islands": 0.0,
+      // Asia & Oceania
+      "Philippines": 4.5, "Vietnam": 4.0, "Cambodia": 5.5, "Laos": 5.0,
+      "Bangladesh": 4.5, "Sri Lanka": 2.0, "Nepal": 3.5, "Bhutan": 2.5,
+      "Malaysia": 3.0, "Taiwan": 0.5, "Japan": 0.2, "South Korea": 0.2,
+      "North Korea": 1.5, "East Timor": 6.0, "Solomon Islands": 7.0,
+      "Vanuatu": 5.5, "Fiji": 2.0, "New Caledonia": 1.0,
+      "Australia": 0.5, "New Zealand": 0.1, "Mongolia": 0.1,
+      "Afghanistan": 5.5, "Iran": 2.5, "Iraq": 1.5, "Saudi Arabia": 2.5,
+      "Yemen": 5.0, "Oman": 1.5, "United Arab Emirates": 0.5,
+      "Syria": 0.5, "Jordan": 0.3, "Lebanon": 0.2, "Israel": 0.2,
+      "Palestine": 0.3, "Turkey": 0.5, "Qatar": 0.3, "Kuwait": 0.3, "Brunei": 1.0,
+      // Central Asia
+      "Kazakhstan": 0.3, "Uzbekistan": 0.5, "Turkmenistan": 0.5,
+      "Tajikistan": 1.0, "Kyrgyzstan": 0.3,
+      // Europe (malaria-free, but historical/imported)
+      "France": 0.2, "Spain": 0.2, "Portugal": 0.2, "Italy": 0.3,
+      "Greece": 0.5, "Croatia": 0.2, "Germany": 0.1, "United Kingdom": 0.1,
+      "Netherlands": 0.1, "Belgium": 0.1, "Austria": 0.1, "Switzerland": 0.1,
+      "Poland": 0.1, "Czechia": 0.1, "Slovakia": 0.1, "Hungary": 0.1,
+      "Romania": 0.2, "Bulgaria": 0.2, "Republic of Serbia": 0.1,
+      "Bosnia and Herzegovina": 0.1, "Montenegro": 0.1, "Kosovo": 0.1,
+      "Macedonia": 0.1, "Albania": 0.2, "Moldova": 0.1, "Ukraine": 0.1,
+      "Belarus": 0.1, "Russia": 0.3, "Georgia": 0.3, "Armenia": 0.2,
+      "Azerbaijan": 0.5, "Cyprus": 0.2, "Northern Cyprus": 0.2,
+      "Slovenia": 0.1, "Luxembourg": 0.1,
+      "Sweden": 0.1, "Norway": 0.1, "Finland": 0.1, "Denmark": 0.1,
+      "Iceland": 0.0, "Estonia": 0.1, "Latvia": 0.1, "Lithuania": 0.1,
+      "Ireland": 0.1, "Greenland": 0.0,
+      // North Africa
+      "Egypt": 1.5, "Libya": 0.5, "Tunisia": 0.3, "Algeria": 0.5, "Morocco": 0.5,
+      // Polar
+      "Antarctica": 0.0, "French Southern and Antarctic Lands": 0.0,
     },
     hotspots: [
       { lat: 9.0820, lng: 8.6753, city: "ABUJA, NIGERIA", weight: 9.9 },
@@ -111,10 +219,68 @@ const MOSQUITO_DATA: Record<MosquitoType, {
     sourceName: "CDC West Nile / WHO JE",
     sourceUrl: "https://www.cdc.gov/west-nile-virus/index.html",
     riskMap: {
+      // Asia (Japanese Encephalitis endemic zone)
       "United States of America": 7.5, "China": 8.0, "India": 8.5, "Italy": 6.5,
-      "Greece": 6.0, "Egypt": 6.5, "Vietnam": 7.8, "Thailand": 7.5, 
+      "Greece": 6.0, "Egypt": 6.5, "Vietnam": 7.8, "Thailand": 7.5,
       "Indonesia": 7.0, "Philippines": 7.0, "Japan": 5.0, "South Korea": 5.5,
-      "Russia": 4.0, "Brazil": 3.0, "Nigeria": 4.0, "Australia": 5.0
+      "Russia": 4.0, "Brazil": 3.0, "Nigeria": 4.0, "Australia": 5.0,
+      // More Asia
+      "Bangladesh": 7.0, "Myanmar": 7.2, "Cambodia": 7.5, "Laos": 7.0,
+      "Malaysia": 6.0, "Sri Lanka": 6.5, "Nepal": 6.5, "Pakistan": 5.5,
+      "Taiwan": 5.5, "North Korea": 5.0, "Bhutan": 4.5, "Brunei": 4.0,
+      "East Timor": 5.0, "Papua New Guinea": 5.5, "Mongolia": 2.0,
+      "Afghanistan": 3.5, "Iran": 3.5, "Iraq": 4.0, "Saudi Arabia": 3.5,
+      "Yemen": 4.0, "Oman": 3.0, "United Arab Emirates": 2.5,
+      "Syria": 3.0, "Jordan": 2.5, "Lebanon": 2.5, "Israel": 3.5,
+      "Palestine": 2.5, "Turkey": 4.5, "Qatar": 2.0, "Kuwait": 2.0,
+      // Central Asia
+      "Kazakhstan": 3.0, "Uzbekistan": 3.5, "Turkmenistan": 3.0,
+      "Tajikistan": 3.5, "Kyrgyzstan": 2.5, "Azerbaijan": 3.5,
+      "Georgia": 3.0, "Armenia": 2.5,
+      // Europe (West Nile Virus spreading)
+      "France": 4.5, "Spain": 4.0, "Portugal": 3.5, "Croatia": 4.5,
+      "Romania": 5.5, "Bulgaria": 4.5, "Hungary": 4.5, "Austria": 3.5,
+      "Republic of Serbia": 5.0, "Bosnia and Herzegovina": 3.5,
+      "Montenegro": 3.0, "Kosovo": 3.0, "Macedonia": 3.5, "Albania": 3.5,
+      "Germany": 3.0, "United Kingdom": 2.0, "Netherlands": 2.5,
+      "Belgium": 2.0, "Switzerland": 2.5, "Poland": 2.5, "Czechia": 2.5,
+      "Slovakia": 3.0, "Moldova": 3.5, "Ukraine": 4.0, "Belarus": 2.5,
+      "Cyprus": 3.5, "Northern Cyprus": 3.5, "Slovenia": 3.0,
+      "Luxembourg": 2.0,
+      // Nordics
+      "Sweden": 1.5, "Norway": 1.0, "Finland": 1.5, "Denmark": 2.0,
+      "Iceland": 0.3, "Estonia": 1.5, "Latvia": 2.0, "Lithuania": 2.0,
+      "Ireland": 1.5, "Greenland": 0.2,
+      // Africa
+      "Democratic Republic of the Congo": 5.0, "Kenya": 4.5,
+      "United Republic of Tanzania": 4.5, "Uganda": 4.0, "Ethiopia": 4.0,
+      "Sudan": 4.5, "South Sudan": 4.0, "Cameroon": 4.0, "Ghana": 3.5,
+      "Senegal": 4.0, "Ivory Coast": 3.5, "Burkina Faso": 3.5, "Mali": 3.5,
+      "Guinea": 3.0, "Sierra Leone": 3.0, "Liberia": 3.0, "Benin": 3.5,
+      "Togo": 3.0, "Niger": 3.5, "Chad": 3.5,
+      "Central African Republic": 3.5, "Republic of the Congo": 3.5,
+      "Gabon": 3.0, "Equatorial Guinea": 3.0, "Angola": 3.5,
+      "Mozambique": 4.0, "Madagascar": 3.5, "Malawi": 3.5,
+      "Zambia": 3.5, "Zimbabwe": 3.0, "Botswana": 2.5, "Namibia": 2.5,
+      "South Africa": 4.0, "Swaziland": 2.0, "Lesotho": 1.0,
+      "Rwanda": 3.0, "Burundi": 3.0, "Somalia": 3.5, "Somaliland": 3.0,
+      "Djibouti": 3.0, "Eritrea": 3.0, "Gambia": 3.0, "Guinea-Bissau": 2.5,
+      "Mauritania": 3.5, "Western Sahara": 2.0,
+      "Libya": 3.5, "Tunisia": 4.0, "Algeria": 3.5, "Morocco": 3.5,
+      // Americas
+      "Colombia": 3.5, "Venezuela": 3.5, "Peru": 3.0, "Ecuador": 3.0,
+      "Bolivia": 2.5, "Paraguay": 3.0, "Argentina": 4.0, "Chile": 1.5,
+      "Mexico": 4.5, "Honduras": 3.0, "Guatemala": 3.0, "El Salvador": 3.0,
+      "Nicaragua": 3.0, "Costa Rica": 2.5, "Panama": 3.0, "Cuba": 3.0,
+      "Dominican Republic": 3.0, "Haiti": 3.0, "Jamaica": 2.5,
+      "Puerto Rico": 3.0, "Trinidad and Tobago": 2.5, "Guyana": 2.5,
+      "Suriname": 2.5, "Belize": 2.5, "The Bahamas": 2.5,
+      "Uruguay": 2.5, "Canada": 4.0, "Falkland Islands": 0.2,
+      // Oceania
+      "Solomon Islands": 3.0, "Vanuatu": 3.0, "Fiji": 3.0,
+      "New Caledonia": 2.5, "New Zealand": 1.0,
+      // Polar
+      "Antarctica": 0.0, "French Southern and Antarctic Lands": 0.0,
     },
     hotspots: [
       { lat: 39.9042, lng: 116.4074, city: "BEIJING, CHINA", weight: 8.0 },
@@ -527,7 +693,15 @@ export default function OutbreakGlobe() {
     if (!activeCountry) return [];
     const countryName = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
     const seed = countryName.length * 10 + (activeMosquito.length * 5);
-    const risk = MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.ADMIN] || MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.NAME] || 0;
+    // Use explicit risk or fallback based on latitude
+    let risk = MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.ADMIN] ?? MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.NAME];
+    if (risk === undefined) {
+      const lat = Math.abs(activeCountry.properties.LABEL_Y || activeCountry.properties.LAT || 0);
+      if (lat < 15) risk = 4.5;
+      else if (lat < 30) risk = 3.0;
+      else if (lat < 45) risk = 1.5;
+      else risk = 0.5;
+    }
     const raw = generateContributions(Date.now(), seed, 365);
     
     // Fix: Accurate and realistic data scaling based on population!
@@ -551,7 +725,15 @@ export default function OutbreakGlobe() {
   const activeCountryLiveRisk = useMemo(() => {
     if (!activeCountry) return 0;
     const name = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
-    return MOSQUITO_DATA[activeMosquito].riskMap[name] || 0;
+    const explicitRisk = MOSQUITO_DATA[activeMosquito].riskMap[name];
+    if (explicitRisk !== undefined) return explicitRisk;
+    // Fallback: estimate risk from latitude (tropical regions = higher mosquito risk)
+    const coords = activeCountry.properties;
+    const lat = Math.abs(coords.LABEL_Y || coords.LAT || 0);
+    if (lat < 15) return 4.5;    // Deep tropics
+    if (lat < 30) return 3.0;    // Subtropics
+    if (lat < 45) return 1.5;    // Temperate
+    return 0.5;                  // High latitudes
   }, [activeCountry, activeMosquito]);
 
   if (!mounted) return null;
