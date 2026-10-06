@@ -206,14 +206,15 @@ export default function OutbreakGlobe() {
           backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
           
           // Polygons (Red, Orange, Yellow)
+          polygonsTransitionDuration={0}
           polygonsData={countries}
-          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.015 : 0.005}
+          polygonAltitude={0.005}
           polygonCapColor={(d: any) => {
-            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "#ffffff"; 
+            if (activeCountry && d.properties.ADMIN === activeCountry.properties.ADMIN) return "#ffffff"; 
             return getRiskColor(d.properties.risk);
           }}
           polygonSideColor={(d: any) => {
-            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "#ffffff"; 
+            if (activeCountry && d.properties.ADMIN === activeCountry.properties.ADMIN) return "#ffffff"; 
             return getRiskColor(d.properties.risk);
           }}
           polygonStrokeColor={() => "#111111"}
