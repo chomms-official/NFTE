@@ -78,10 +78,10 @@ const MOSQUITO_DATA: Record<MosquitoType, {
       "Russia": 4.0, "Brazil": 3.0, "Nigeria": 4.0, "Australia": 5.0
     },
     hotspots: [
-      { lat: 39.9042, lng: 116.4074, city: "Beijing, China", weight: 8.0 },
-      { lat: 28.6139, lng: 77.2090, city: "New Delhi, India", weight: 8.5 },
-      { lat: 40.7128, lng: -74.0060, city: "New York, USA", weight: 7.5 },
-      { lat: 41.9028, lng: 12.4964, city: "Rome, Italy", weight: 6.5 },
+      { lat: 39.9042, lng: 116.4074, city: "BEIJING, CHINA", weight: 8.0 },
+      { lat: 28.6139, lng: 77.2090, city: "NEW DELHI, INDIA", weight: 8.5 },
+      { lat: 40.7128, lng: -74.0060, city: "NEW YORK, USA", weight: 7.5 },
+      { lat: 41.9028, lng: 12.4964, city: "ROME, ITALY", weight: 6.5 },
     ]
   }
 };
@@ -185,7 +185,7 @@ export default function OutbreakGlobe() {
     if (globeEl.current && mounted) {
       const controls = globeEl.current.controls();
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.5; 
+      controls.autoRotateSpeed = 0.15; 
       controls.enableZoom = true;
       
       // If no active country, look at the first hotspot of the active mosquito
@@ -202,9 +202,16 @@ export default function OutbreakGlobe() {
     const seed = activeCountry.properties.ADMIN.length * 10 + (activeMosquito.length * 5);
     const risk = activeCountry.properties.risk;
     const raw = generateContributions(Date.now(), seed, 365);
+    
+    const riskMultiplier = risk < 4.5 
+      ? (risk * risk) * 0.1 
+      : risk < 7.5 
+        ? (risk * risk) * 2 
+        : (risk * risk) * 15;
+
     return raw.map((d) => ({
       date: d.date,
-      count: d.count === 0 ? 0 : Math.floor(d.count * (risk * 250) + Math.random() * (risk * 50))
+      count: d.count === 0 ? 0 : Math.floor(d.count * riskMultiplier + Math.random() * riskMultiplier * 0.5)
     }));
   }, [activeCountry, activeMosquito]);
 
@@ -349,8 +356,8 @@ export default function OutbreakGlobe() {
         </div>
       </div>
 
-      {/* Selected Disease Info - Bottom Right */}
-      <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 max-w-[200px] sm:max-w-xs bg-black/70 p-3 sm:p-5 rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl">
+      {/* Selected Disease Info - Bottom Right (Stacked on mobile) */}
+      <div className="absolute bottom-[140px] left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-xs bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl pointer-events-auto">
         <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-1 sm:mb-2 border-b border-white/10 pb-1 sm:pb-2">
           {MOSQUITO_DATA[activeMosquito].name} Vectors
         </h4>
