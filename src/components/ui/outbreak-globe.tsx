@@ -174,6 +174,11 @@ export default function OutbreakGlobe() {
   const handleSelectCountry = (countryFeature: any) => {
     cancelFlight();
     
+    // Explicitly turn off autopilot if user manually selects a country
+    if (autoTourEnabled) {
+      setAutoTourEnabled(false);
+    }
+    
     // Calculate destination
     let pt = countryFeature.geometry?.coordinates;
     while (pt && Array.isArray(pt[0])) pt = pt[0];
@@ -324,19 +329,26 @@ export default function OutbreakGlobe() {
 
   // 1. Detect User Interaction to turn off tour (Only on the globe itself!)
   useEffect(() => {
+    let interactionTimeout: NodeJS.Timeout;
     const handleInteraction = () => {
       if (!autoTourEnabled) return;
-      // If we are interrupting, cancel any mid-air autopilot flight immediately
-      cancelFlight();
-      setAutoTourEnabled(false);
+      
+      // Delay the interruption slightly so it doesn't swallow native click/tap events on mobile
+      clearTimeout(interactionTimeout);
+      interactionTimeout = setTimeout(() => {
+        cancelFlight();
+        setAutoTourEnabled(false);
+      }, 150);
     };
 
     const globeContainer = document.getElementById('globe-container');
     if (!globeContainer) return;
 
-    const events = ['mousedown', 'touchstart', 'wheel'];
+    // Use pointerdown instead of mousedown/touchstart for better mobile compatibility without blocking clicks
+    const events = ['pointerdown', 'wheel'];
     events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true }));
     return () => {
+      clearTimeout(interactionTimeout);
       events.forEach(e => globeContainer.removeEventListener(e, handleInteraction));
     };
   }, [autoTourEnabled]);
