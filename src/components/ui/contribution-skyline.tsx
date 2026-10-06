@@ -1331,9 +1331,9 @@ export default function ContributionSkyline({
             }}
           >
             <div className="min-h-0 overflow-hidden">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-4 px-3 pt-4 pb-1 sm:px-4 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-2 pt-4 pb-1 sm:gap-x-4 sm:px-4 md:grid-cols-4">
                 {statBlocks.map((b) => (
-                  <Stat key={b.label} {...b} accent={theme.accent} size={28} align="stack" />
+                  <Stat key={b.label} {...b} accent={theme.accent} size={width < 450 ? 20 : 28} align="stack" />
                 ))}
               </div>
             </div>

@@ -13,9 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chomm's House | Natural Protection",
-  description: "Natural Protection - Mosquito Repellent Film",
+  title: "MozzieMap",
+  description: "Global Mosquito Outbreak Simulator",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192x192.png",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 export const viewport = {

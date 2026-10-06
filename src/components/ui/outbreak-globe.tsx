@@ -299,16 +299,16 @@ export default function OutbreakGlobe() {
               onClick={() => {
                 setActiveMosquito(key);
               }}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap shrink-0 ${
                 isActive 
                   ? "bg-red-600/90 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-500 scale-100 sm:scale-105" 
                   : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 border border-transparent"
               }`}
             >
-              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isActive ? "animate-pulse" : ""}`} />
+              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 shrink-0 ${isActive ? "animate-pulse" : ""}`} />
               <div className="flex flex-col items-start text-left">
                 <span className="leading-none">{data.name}</span>
-                <span className={`text-[8px] sm:text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
+                <span className={`text-[7px] sm:text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
                   {data.diseases.split(",")[0]}
                 </span>
               </div>
@@ -352,18 +352,18 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-[#050505]/98 border-l border-white/10 shadow-2xl p-6 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
+        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-[#050505]/98 border-l border-white/10 shadow-2xl p-4 pt-24 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
           <button 
             onClick={() => {
               setActiveCountry(null);
               if (globeEl.current) globeEl.current.controls().autoRotate = true;
             }}
-            className="absolute top-8 right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10"
+            className="absolute top-24 right-4 sm:top-8 sm:right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10 z-[70]"
           >
-            <XIcon className="w-6 h-6" />
+            <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
 
-          <div className="flex items-center gap-4 mb-4 mt-4">
+          <div className="flex items-center gap-4 mb-4 mt-2 sm:mt-4">
             {(() => {
               const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
               return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
@@ -373,9 +373,9 @@ export default function OutbreakGlobe() {
             </h2>
           </div>
           
-          <div className="flex flex-wrap items-center gap-4 mb-10">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-6 sm:mb-10">
             <span 
-              className="px-4 py-2 border rounded-full text-sm font-black uppercase tracking-widest"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 border rounded-full text-[10px] sm:text-sm font-black uppercase tracking-widest whitespace-nowrap"
               style={{ 
                 borderColor: getRiskColorRGBA(activeCountry.properties.risk, 0.5), 
                 color: getRiskColor(activeCountry.properties.risk),
@@ -384,7 +384,7 @@ export default function OutbreakGlobe() {
             >
               Risk Level: {activeCountry.properties.risk.toFixed(1)} / 10
             </span>
-            <span className="text-zinc-400 text-sm font-medium tracking-wide bg-white/5 px-4 py-2 rounded-full border border-white/5">
+            <span className="text-zinc-400 text-[10px] sm:text-sm font-medium tracking-wide bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/5 whitespace-nowrap">
               Population: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
             </span>
           </div>
