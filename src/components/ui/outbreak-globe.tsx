@@ -297,7 +297,9 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* TOP CONTROLS: Mosquito Selectors */}
-      <div className="absolute top-4 sm:top-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar">
+      <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
+        activeCountry ? "left-4 sm:left-6 transform-none" : "left-1/2 transform -translate-x-1/2"
+      }`}>
         {(Object.entries(MOSQUITO_DATA) as [MosquitoType, any][]).map(([key, data]) => {
           const isActive = activeMosquito === key;
           const Icon = data.icon;
