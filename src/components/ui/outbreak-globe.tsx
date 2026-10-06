@@ -252,7 +252,7 @@ export default function OutbreakGlobe() {
             </div>
           `}
 
-          // Active Pulsing Hotspots (3D Extruded Alerts)
+          // Active Pulsing Hotspots (Surface Ripples)
           ringsData={ringData}
           ringColor="color"
           ringMaxRadius="maxR"
@@ -260,13 +260,31 @@ export default function OutbreakGlobe() {
           ringRepeatPeriod="repeatPeriod"
           ringAltitude={0.015} // Elevate above country polygons
           
-          pointsData={ringData}
-          pointLat="lat"
-          pointLng="lng"
-          pointColor="color"
-          pointAltitude={(d: any) => (d.weight / 10) * 0.15} // 3D extrusion height based on weight
-          pointRadius={0.35}
-          pointResolution={32}
+          // Beautiful Glowing 3D-like HUD Markers
+          htmlElementsData={ringData}
+          htmlElement={(d: any) => {
+            const el = document.createElement('div');
+            el.className = "pointer-events-none transform -translate-x-1/2 -translate-y-full";
+            el.innerHTML = `
+              <div class="relative flex flex-col items-center justify-end group">
+                <!-- Floating Info Box -->
+                <div class="absolute bottom-12 bg-black/90 text-red-100 text-[10px] font-black px-3 py-1.5 rounded-lg border border-red-500/50 backdrop-blur-md whitespace-nowrap uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+                  ${d.city}
+                  <span class="block text-red-500/90 text-[8px] mt-0.5">CRITICAL LEVEL: ${d.weight.toFixed(1)}</span>
+                </div>
+                
+                <!-- Laser Beam / Extruded Line -->
+                <div class="w-[2px] h-12 bg-gradient-to-t from-red-600 via-red-500 to-transparent absolute bottom-2 shadow-[0_0_10px_rgba(220,38,38,0.8)]"></div>
+                
+                <!-- Glowing Base Dot -->
+                <div class="relative z-10 w-3 h-3 bg-white rounded-full shadow-[0_0_15px_5px_rgba(220,38,38,0.9)] border-2 border-red-600"></div>
+                
+                <!-- Intense Pulse Effect -->
+                <div class="absolute bottom-[-6px] w-6 h-6 bg-red-600/50 rounded-full animate-ping"></div>
+              </div>
+            `;
+            return el;
+          }}
         />
       </div>
 
