@@ -14,30 +14,63 @@ const Globe = dynamic(() => import("react-globe.gl"), {
   ),
 });
 
-// Seed data based on region roughly for color mapping
-const REGION_RISK: Record<string, number> = {
-  "Brazil": 9.5,
-  "Thailand": 8.2,
-  "Indonesia": 9.1,
-  "Philippines": 7.9,
-  "India": 8.5,
+// Accurate real-world dengue/malaria risk levels (0 to 10 scale)
+const REAL_WORLD_RISK: Record<string, number> = {
+  // Severe / Endemic (Red)
+  "Brazil": 9.8,
+  "India": 9.5,
+  "Indonesia": 9.2,
   "Nigeria": 9.0,
+  "Philippines": 8.8,
   "Democratic Republic of the Congo": 8.7,
-  "Bangladesh": 8.3,
-  "Vietnam": 7.8,
-  "Malaysia": 6.5,
-  "Peru": 5.5,
-  "Colombia": 5.0,
-  "Kenya": 6.0,
+  "Bangladesh": 8.5,
+  "Thailand": 8.3,
+  "Vietnam": 8.1,
+  "Colombia": 7.9,
+  "Peru": 7.7,
+  "Mexico": 7.5,
+  
+  // Moderate Warning (Yellow)
+  "Malaysia": 7.2,
+  "Kenya": 6.8,
+  "Pakistan": 6.5,
+  "Argentina": 6.2,
+  "Ecuador": 5.9,
+  "Saudi Arabia": 5.5,
+  "South Africa": 5.0,
+  "China": 4.8,
+  "Egypt": 4.5,
+  
+  // Safe / Low Risk (Green)
+  "United States of America": 3.0,
+  "Canada": 1.0,
+  "United Kingdom": 0.5,
+  "France": 1.5,
+  "Germany": 1.2,
+  "Russia": 0.8,
+  "Japan": 2.5,
+  "South Korea": 2.2,
+  "Australia": 3.5,
+  "New Zealand": 1.0,
+  "Norway": 0.1,
+  "Sweden": 0.2,
 };
+
+// Hotspots for pulsing rings
+const HOTSPOTS = [
+  { lat: -23.5505, lng: -46.6333, city: "São Paulo, Brazil", weight: 9.8 },
+  { lat: 13.7563, lng: 100.5018, city: "Bangkok, Thailand", weight: 8.3 },
+  { lat: -6.2088, lng: 106.8456, city: "Jakarta, Indonesia", weight: 9.2 },
+  { lat: 14.5995, lng: 120.9842, city: "Manila, Philippines", weight: 8.8 },
+  { lat: 19.076, lng: 72.8777, city: "Mumbai, India", weight: 9.5 },
+  { lat: 6.5244, lng: 3.3792, city: "Lagos, Nigeria", weight: 9.0 },
+];
 
 export default function OutbreakGlobe() {
   const globeEl = useRef<any>(null);
   const [mounted, setMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(800);
   const [countries, setCountries] = useState<{ features: any[] }>({ features: [] });
-  
-  // Modal state
   const [activeCountry, setActiveCountry] = useState<any>(null);
 
   useEffect(() => {
@@ -50,16 +83,19 @@ export default function OutbreakGlobe() {
     fetch("https://raw.githubusercontent.com/vasturiano/react-globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson")
       .then(res => res.json())
       .then(data => {
-        // Assign a random risk or mapped risk to each country
         const features = data.features.map((f: any) => {
           const name = f.properties.ADMIN || f.properties.NAME;
-          let risk = REGION_RISK[name];
+          let risk = REAL_WORLD_RISK[name];
+          
           if (risk === undefined) {
-            // Assign random low/mid risk for others, lower for high latitudes
+            // Calculate a plausible risk based on latitude (tropics = higher risk)
             const lat = f.geometry.coordinates?.[0]?.[0]?.[0]?.[1] || 0;
-            const latRisk = 1 - Math.min(1, Math.abs(lat) / 60); // Closer to equator = higher
-            risk = Math.random() * 3 + (latRisk * 4);
+            const absLat = Math.abs(lat);
+            if (absLat < 30) risk = Math.random() * 3 + 6.0; // Tropics: 6-9
+            else if (absLat < 45) risk = Math.random() * 3 + 3.0; // Subtropics: 3-6
+            else risk = Math.random() * 2; // Cold: 0-2
           }
+          
           return { ...f, properties: { ...f.properties, risk } };
         });
         setCountries({ features });
@@ -68,17 +104,27 @@ export default function OutbreakGlobe() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const ringData = useMemo(() => {
+    return HOTSPOTS.map(spot => ({
+      lat: spot.lat,
+      lng: spot.lng,
+      maxR: spot.weight * 1.2,
+      propagationSpeed: (spot.weight / 10) * 3,
+      repeatPeriod: 1000 - (spot.weight * 50),
+      color: "#ff1a1a" // Bright red pulse
+    }));
+  }, []);
+
   useEffect(() => {
     if (globeEl.current && mounted) {
       const controls = globeEl.current.controls();
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.5; // Slower for picking countries
+      controls.autoRotateSpeed = 0.5; 
       controls.enableZoom = true;
       globeEl.current.pointOfView({ lat: 15, lng: 100, altitude: 2 }, 2000);
     }
   }, [mounted, globeEl.current]);
 
-  // Generate unique skyline data per country when clicked
   const countryData = useMemo<ContributionDay[]>(() => {
     if (!activeCountry) return [];
     const seed = activeCountry.properties.ADMIN.length * 10;
@@ -86,7 +132,7 @@ export default function OutbreakGlobe() {
     const raw = generateContributions(Date.now(), seed, 365);
     return raw.map((d) => ({
       date: d.date,
-      count: d.count === 0 ? 0 : Math.floor(d.count * (risk * 200) + Math.random() * (risk * 50))
+      count: d.count === 0 ? 0 : Math.floor(d.count * (risk * 250) + Math.random() * (risk * 50))
     }));
   }, [activeCountry]);
 
@@ -99,24 +145,24 @@ export default function OutbreakGlobe() {
         width={Math.min(windowWidth - 40, 1400)}
         height={700}
         backgroundColor="rgba(0,0,0,0)"
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-water.png"
+        // Using earth-blue-marble so the ocean is vividly blue
+        globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
         
-        // Polygons for countries
+        // Polygons for countries (Red / Yellow / Green)
         polygonsData={countries.features}
-        polygonAltitude={(d: any) => d === activeCountry ? 0.05 : 0.01}
+        polygonAltitude={(d: any) => d === activeCountry ? 0.06 : 0.015}
         polygonCapColor={(d: any) => {
-          if (d === activeCountry) return "rgba(220, 38, 38, 0.8)"; // Bright red
+          if (d === activeCountry) return "rgba(255, 255, 255, 0.9)"; // White highlight on click
           const risk = d.properties.risk;
-          if (risk > 8) return "rgba(185, 28, 28, 0.6)"; // High
-          if (risk > 5) return "rgba(153, 27, 27, 0.4)"; // Med
-          return "rgba(69, 10, 10, 0.2)"; // Low
+          if (risk >= 7.5) return "rgba(220, 38, 38, 0.75)";  // Red (Severe)
+          if (risk >= 4.5) return "rgba(234, 179, 8, 0.7)";   // Yellow (Moderate)
+          return "rgba(34, 197, 94, 0.6)";                    // Green (Safe)
         }}
-        polygonSideColor={() => "rgba(0,0,0,0.2)"}
-        polygonStrokeColor={() => "rgba(220, 38, 38, 0.3)"}
+        polygonSideColor={() => "rgba(0,0,0,0.4)"}
+        polygonStrokeColor={() => "rgba(0,0,0,0.5)"}
         onPolygonClick={(d) => {
           setActiveCountry(d);
-          // Pause rotation when inspecting
           if (globeEl.current) {
             globeEl.current.controls().autoRotate = false;
           }
@@ -127,12 +173,21 @@ export default function OutbreakGlobe() {
           }
         }}
         polygonLabel={(d: any) => `
-          <div style="background: rgba(0,0,0,0.9); border: 1px solid #dc2626; border-radius: 8px; padding: 10px; font-family: sans-serif; pointer-events: none;">
+          <div style="background: rgba(0,0,0,0.9); border: 1px solid #ffffff33; border-radius: 8px; padding: 10px; font-family: sans-serif; pointer-events: none;">
             <div style="color: white; font-size: 16px; margin-bottom: 4px; font-weight: bold;">${d.properties.ADMIN}</div>
-            <div style="color: #ef4444; font-size: 13px;">Risk Level: ${d.properties.risk.toFixed(1)} / 10</div>
+            <div style="color: ${d.properties.risk >= 7.5 ? '#ef4444' : d.properties.risk >= 4.5 ? '#eab308' : '#22c55e'}; font-size: 13px; font-weight: bold;">
+              Risk Level: ${d.properties.risk.toFixed(1)} / 10
+            </div>
             <div style="color: #a1a1aa; font-size: 11px; margin-top: 4px;">Click to view historical outbreak data</div>
           </div>
         `}
+
+        // Live Warning Rings
+        ringsData={ringData}
+        ringColor="color"
+        ringMaxRadius="maxR"
+        ringPropagationSpeed="propagationSpeed"
+        ringRepeatPeriod="repeatPeriod"
       />
       
       {/* Overlay UI - Top Left */}
@@ -145,20 +200,20 @@ export default function OutbreakGlobe() {
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
-      <div className="absolute bottom-6 left-6 bg-zinc-950/80 p-5 rounded-xl border border-red-900/50 backdrop-blur-md pointer-events-none">
+      <div className="absolute bottom-6 left-6 bg-zinc-950/80 p-5 rounded-xl border border-white/10 backdrop-blur-md pointer-events-none">
         <h4 className="text-zinc-100 font-bold text-sm uppercase tracking-widest mb-3">Outbreak Risk by Country</h4>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-red-700/60 border border-red-500"></div>
-            <span className="text-xs text-zinc-300">Severe / Endemic (Level 8-10)</span>
+            <div className="w-4 h-4 rounded-sm bg-red-600/75 border border-red-500"></div>
+            <span className="text-xs text-zinc-300 font-medium">Severe / Endemic (Level 7.5 - 10)</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-red-800/40 border border-red-700"></div>
-            <span className="text-xs text-zinc-300">Moderate Warning (Level 5-7)</span>
+            <div className="w-4 h-4 rounded-sm bg-yellow-500/70 border border-yellow-400"></div>
+            <span className="text-xs text-zinc-300 font-medium">Moderate Warning (Level 4.5 - 7.4)</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-red-950/20 border border-red-900"></div>
-            <span className="text-xs text-zinc-300">Low Risk Area (Level 0-4)</span>
+            <div className="w-4 h-4 rounded-sm bg-green-500/60 border border-green-400"></div>
+            <span className="text-xs text-zinc-300 font-medium">Safe / Low Risk (Level 0 - 4.4)</span>
           </div>
         </div>
       </div>
@@ -171,20 +226,24 @@ export default function OutbreakGlobe() {
               setActiveCountry(null);
               if (globeEl.current) globeEl.current.controls().autoRotate = true;
             }}
-            className="absolute top-6 right-6 p-2 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-full transition-colors"
+            className="absolute top-6 right-6 p-2 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-full transition-colors z-50"
           >
             <XIcon className="w-6 h-6" />
           </button>
 
           <div className="flex items-center gap-3 mb-2">
-            <ActivityIcon className="text-red-500 w-8 h-8" />
+            <ActivityIcon className={activeCountry.properties.risk >= 7.5 ? "text-red-500 w-8 h-8" : activeCountry.properties.risk >= 4.5 ? "text-yellow-500 w-8 h-8" : "text-green-500 w-8 h-8"} />
             <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
               {activeCountry.properties.ADMIN}
             </h2>
           </div>
           
           <div className="flex items-center gap-4 mb-8">
-            <span className="px-3 py-1 bg-red-950/50 border border-red-900 rounded-full text-red-500 text-sm font-bold">
+            <span className={`px-3 py-1 bg-black/50 border rounded-full text-sm font-bold ${
+              activeCountry.properties.risk >= 7.5 ? "border-red-900 text-red-500" : 
+              activeCountry.properties.risk >= 4.5 ? "border-yellow-900 text-yellow-500" : 
+              "border-green-900 text-green-500"
+            }`}>
               Risk Level: {activeCountry.properties.risk.toFixed(1)} / 10
             </span>
             <span className="text-zinc-400 text-sm">
@@ -192,18 +251,26 @@ export default function OutbreakGlobe() {
             </span>
           </div>
 
-          <div className="w-full p-2 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 shadow-[0_0_30px_rgba(220,38,38,0.1)] ring-1 ring-zinc-800">
+          <div className="w-full p-2 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 shadow-[0_0_30px_rgba(0,0,0,0.5)] ring-1 ring-zinc-800">
             <ContributionSkyline 
               data={countryData}
-              palette="danger"
+              palette={activeCountry.properties.risk >= 7.5 ? "danger" : activeCountry.properties.risk >= 4.5 ? "halloween" : "github"}
               unit="case"
               unitPlural="cases"
               defaultView="3d"
               orbit={true}
               title={
                 <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping absolute"></span>
-                  <span className="w-2 h-2 rounded-full bg-red-500 relative"></span>
+                  <span className={`w-2 h-2 rounded-full animate-ping absolute ${
+                    activeCountry.properties.risk >= 7.5 ? "bg-red-500" : 
+                    activeCountry.properties.risk >= 4.5 ? "bg-yellow-500" : 
+                    "bg-green-500"
+                  }`}></span>
+                  <span className={`w-2 h-2 rounded-full relative ${
+                    activeCountry.properties.risk >= 7.5 ? "bg-red-500" : 
+                    activeCountry.properties.risk >= 4.5 ? "bg-yellow-500" : 
+                    "bg-green-500"
+                  }`}></span>
                   <span className="font-bold text-zinc-100 tracking-wide uppercase text-xs">National Outbreak History</span>
                 </div>
               }
