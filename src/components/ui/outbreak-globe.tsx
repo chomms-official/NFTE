@@ -207,13 +207,16 @@ export default function OutbreakGlobe() {
           
           // Polygons (Red, Orange, Yellow)
           polygonsData={countries}
-          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.01 : 0.005}
+          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.015 : 0.005}
           polygonCapColor={(d: any) => {
-            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "rgba(255, 255, 255, 0.9)"; 
+            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "#ffffff"; 
             return getRiskColor(d.properties.risk);
           }}
-          polygonSideColor={() => "rgba(0, 0, 0, 0.05)"}
-          polygonStrokeColor={() => "rgba(255, 255, 255, 0.1)"}
+          polygonSideColor={(d: any) => {
+            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "#ffffff"; 
+            return getRiskColor(d.properties.risk);
+          }}
+          polygonStrokeColor={() => "#111111"}
           onPolygonClick={(d: any) => {
             setActiveCountry(d);
             if (globeEl.current) {
