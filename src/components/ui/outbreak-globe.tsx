@@ -147,6 +147,7 @@ export default function OutbreakGlobe() {
   const [activeCountry, setActiveCountry] = useState<any>(null);
   const [prevCoords, setPrevCoords] = useState<{lat: number, lng: number} | null>(null);
   const airplaneMeshRef = useRef<THREE.Group | null>(null);
+  const trailLineRef = useRef<THREE.Line | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const flightTimerRef = useRef<any>(null);
 
@@ -156,11 +157,20 @@ export default function OutbreakGlobe() {
     if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     
+    // Clean up previous trail to prevent memory leaks / visual artifacts if clicked rapidly
+    if (trailLineRef.current && globeEl.current) {
+      const scene = globeEl.current.scene();
+      scene.remove(trailLineRef.current);
+      if (trailLineRef.current.geometry) trailLineRef.current.geometry.dispose();
+      if (trailLineRef.current.material) (trailLineRef.current.material as THREE.Material).dispose();
+      trailLineRef.current = null;
+    }
+    
     // Calculate destination
-    let pt = countryFeature.geometry.coordinates;
+    let pt = countryFeature.geometry?.coordinates;
     while (pt && Array.isArray(pt[0])) pt = pt[0];
-    const destLng = pt[0] || 0;
-    const destLat = pt[1] || 0;
+    const destLng = pt ? pt[0] : 0;
+    const destLat = pt ? pt[1] : 0;
     
     // Get current view for flight start
     let startLat = 0;
@@ -189,12 +199,13 @@ export default function OutbreakGlobe() {
     if (globeEl.current) {
       globeEl.current.controls().autoRotate = false;
       const offsetLng = window.innerWidth > 768 ? 25 : 0;
+      const offsetLat = window.innerWidth <= 768 ? -20 : 0; // Shift camera South so country moves North (Up) out of the modal!
       
       // Calculate flight duration dynamically so it doesn't look too fast if going around the whole globe
       const lngDiff = endLng - startLng;
       const flightDuration = Math.max(1500, (lngDiff / 360) * 3500); 
       
-      globeEl.current.pointOfView({ lat: endLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
+      globeEl.current.pointOfView({ lat: endLat + offsetLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
       
       // 3D Airplane Animation
       const scene = globeEl.current.scene();
@@ -229,6 +240,7 @@ export default function OutbreakGlobe() {
       const trailMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, linewidth: 2 });
       const trailLine = new THREE.Line(trailGeo, trailMat);
       scene.add(trailLine);
+      trailLineRef.current = trailLine;
       
       const startTime = performance.now();
       const maxAltitude = 25; // 25 units above the globe surface (globe R=100)
@@ -260,6 +272,7 @@ export default function OutbreakGlobe() {
         
         // 4. Update Trail precisely at the tail
         const tailOffset = new THREE.Vector3(0, 0, 1.5); // Tail is at local +Z 1.5
+        plane.updateMatrixWorld();
         plane.localToWorld(tailOffset); // Convert to world coordinates
         
         for (let i = maxTrailPoints - 1; i > 0; i--) {
@@ -651,7 +664,7 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-[#050505]/98 border-l border-white/10 shadow-2xl p-4 pt-24 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
+        <div className="absolute bottom-0 md:top-0 right-0 h-[85vh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 rounded-t-3xl md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl p-4 pt-16 md:pt-24 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
           <button 
             onClick={() => {
               setActiveCountry(null);
@@ -660,7 +673,7 @@ export default function OutbreakGlobe() {
                 globeEl.current.controls().autoRotateSpeed = 0.15;
               }
             }}
-            className="absolute top-24 right-4 sm:top-8 sm:right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10 z-[70]"
+            className="absolute top-4 right-4 sm:top-8 sm:right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10 z-[70]"
           >
             <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>

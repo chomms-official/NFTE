@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mozziemap-cache-v2';
+const CACHE_NAME = 'mozziemap-cache-v3';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -82,7 +82,7 @@ self.addEventListener('fetch', (event) => {
 
       // If not in cache, fetch from network and cache it
       return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
+        if (!response || response.status !== 200) {
           return response;
         }
         const responseToCache = response.clone();
