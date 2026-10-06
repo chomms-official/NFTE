@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-react";
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
+import * as THREE from "three";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -13,6 +14,44 @@ const Globe = dynamic(() => import("react-globe.gl"), {
     </div>
   ),
 });
+
+const createAirplane = () => {
+  const group = new THREE.Group();
+  
+  // Fuselage
+  const bodyGeo = new THREE.CylinderGeometry(0.6, 0.6, 4, 16);
+  bodyGeo.rotateX(Math.PI / 2); 
+  const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0x111111, shininess: 100 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  
+  // Nose (pointing to -Z)
+  const noseGeo = new THREE.ConeGeometry(0.6, 2, 16);
+  noseGeo.translate(0, 3, 0); // move along +Y
+  noseGeo.rotateX(-Math.PI / 2); // rotate +Y to -Z
+  const noseMat = new THREE.MeshPhongMaterial({ color: 0xcc0000, specular: 0x111111, shininess: 100 });
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  
+  // Wings
+  const wingGeo = new THREE.BoxGeometry(7, 0.15, 2);
+  const wingMat = new THREE.MeshPhongMaterial({ color: 0xdddddd });
+  const wings = new THREE.Mesh(wingGeo, wingMat);
+  wings.position.set(0, 0, 0);
+  
+  // Tail
+  const tailGeo = new THREE.BoxGeometry(3, 0.15, 1);
+  const tail = new THREE.Mesh(tailGeo, wingMat);
+  tail.position.set(0, 0, 1.5);
+  
+  // Fin
+  const finGeo = new THREE.BoxGeometry(0.15, 1.5, 1.2);
+  const fin = new THREE.Mesh(finGeo, noseMat);
+  fin.position.set(0, 0.75, 1.5);
+  
+  group.add(body, nose, wings, tail, fin);
+  group.scale.set(0.6, 0.6, 0.6); 
+  
+  return group;
+};
 
 type MosquitoType = "aedes" | "anopheles" | "culex";
 
@@ -106,28 +145,36 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
-  const [flightPath, setFlightPath] = useState<any>(null);
+  const [flightPath, setFlightPath] = useState<any>(null); // Keep this for the arc!
+  const [prevCoords, setPrevCoords] = useState<{lat: number, lng: number} | null>(null);
+  const airplaneMeshRef = useRef<THREE.Group | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const flightTimerRef = useRef<any>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
 
   const handleSelectCountry = (countryFeature: any) => {
     if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
-    
-    // Get current view for flight start
-    let startLat = 0;
-    let startLng = 0;
-    if (globeEl.current) {
-      const pov = globeEl.current.pointOfView();
-      startLat = pov.lat;
-      startLng = pov.lng;
-    }
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     
     // Calculate destination
     let pt = countryFeature.geometry.coordinates;
     while (pt && Array.isArray(pt[0])) pt = pt[0];
     const destLng = pt[0] || 0;
     const destLat = pt[1] || 0;
+    
+    // Get current view for flight start
+    let startLat = 0;
+    let startLng = 0;
+    
+    if (prevCoords) {
+      startLat = prevCoords.lat;
+      startLng = prevCoords.lng;
+    } else if (globeEl.current) {
+      const pov = globeEl.current.pointOfView();
+      startLat = pov.lat;
+      startLng = pov.lng;
+    }
     
     setFlightPath({
       startLat,
@@ -143,12 +190,70 @@ export default function OutbreakGlobe() {
       globeEl.current.controls().autoRotate = false;
       const offsetLng = window.innerWidth > 768 ? 25 : 0;
       globeEl.current.pointOfView({ lat: destLat, lng: destLng + offsetLng, altitude: 1.5 }, 1500);
+      
+      // 3D Airplane Animation
+      const scene = globeEl.current.scene();
+      if (!airplaneMeshRef.current) {
+        airplaneMeshRef.current = createAirplane();
+      }
+      const plane = airplaneMeshRef.current;
+      if (!scene.children.includes(plane)) {
+        scene.add(plane);
+      }
+      
+      const startCoord = globeEl.current.getCoords(startLat, startLng, 0);
+      const endCoord = globeEl.current.getCoords(destLat, destLng, 0);
+      
+      const startVec = new THREE.Vector3(startCoord.x, startCoord.y, startCoord.z);
+      const endVec = new THREE.Vector3(endCoord.x, endCoord.y, endCoord.z);
+      
+      const flightDuration = 1500;
+      const startTime = performance.now();
+      const maxAltitude = 25; // 25 units above the globe surface (globe R=100)
+      
+      const animateFlight = (time: number) => {
+        let t = (time - startTime) / flightDuration;
+        if (t > 1) t = 1;
+        
+        const R = startVec.length();
+        
+        // 1. Interpolate position on the sphere surface (great circle)
+        const currentPos = startVec.clone().lerp(endVec, t).normalize().multiplyScalar(R);
+        
+        // 2. Add parabolic altitude
+        const currentAltitude = Math.sin(t * Math.PI) * maxAltitude;
+        const normal = currentPos.clone().normalize();
+        currentPos.add(normal.clone().multiplyScalar(currentAltitude));
+        
+        // 3. Look at the next point slightly ahead
+        let tNext = t + 0.05;
+        if (tNext > 1) tNext = 1;
+        
+        const nextPosBase = startVec.clone().lerp(endVec, tNext).normalize().multiplyScalar(R);
+        const nextAltitude = Math.sin(tNext * Math.PI) * maxAltitude;
+        const nextNormal = nextPosBase.clone().normalize();
+        const nextPos = nextPosBase.add(nextNormal.multiplyScalar(nextAltitude));
+        
+        plane.position.copy(currentPos);
+        plane.up.copy(normal); // Keep the plane's roof pointing away from the earth
+        plane.lookAt(nextPos);
+        
+        if (t < 1) {
+          animationFrameRef.current = requestAnimationFrame(animateFlight);
+        } else {
+          // Flight ended
+          scene.remove(plane);
+        }
+      };
+      
+      animationFrameRef.current = requestAnimationFrame(animateFlight);
     }
     
     // Wait for flight to finish before showing modal
     flightTimerRef.current = setTimeout(() => {
       setActiveCountry(countryFeature);
-      setFlightPath(null); // Clear flight path after arriving
+      setPrevCoords({ lat: destLat, lng: destLng }); // Store for next flight
+      setFlightPath(null); // Clear glowing arc
     }, 1500);
   };
 
