@@ -352,7 +352,7 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-black/80 border-l border-white/10 backdrop-blur-2xl shadow-2xl p-6 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
+        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-[#050505]/98 border-l border-white/10 shadow-2xl p-6 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
           <button 
             onClick={() => {
               setActiveCountry(null);
@@ -389,7 +389,7 @@ export default function OutbreakGlobe() {
             </span>
           </div>
 
-          <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden">
+          <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden transform-gpu">
             <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></div>
             
             <ContributionSkyline 
