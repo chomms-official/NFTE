@@ -211,7 +211,7 @@ export default function OutbreakGlobe() {
   if (!mounted) return null;
 
   return (
-    <div className="relative w-screen h-screen flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
+    <div className="relative w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
       <div className="absolute inset-0 cursor-move">
         <Globe
@@ -326,33 +326,33 @@ export default function OutbreakGlobe() {
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
-      <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl scale-90 sm:scale-100 origin-bottom-left">
-        <h4 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
-          <ActivityIcon className="w-4 h-4 text-red-500" /> 
+      <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+        <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+          <ActivityIcon className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" /> 
           Risk Heatmap (Live)
         </h4>
-        <div className="flex flex-col gap-3.5">
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-[4px] bg-red-600/80 border border-red-400 shadow-[0_0_12px_rgba(220,38,38,0.6)]"></div>
-            <span className="text-xs text-zinc-200 font-semibold tracking-wide">Severe (Level 7.5 - 10)</span>
+        <div className="flex flex-col gap-2 sm:gap-3.5">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-[3px] sm:rounded-[4px] bg-red-600/80 border border-red-400 shadow-[0_0_12px_rgba(220,38,38,0.6)]"></div>
+            <span className="text-[9px] sm:text-xs text-zinc-200 font-semibold tracking-wide">Severe (Level 7.5 - 10)</span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-[4px] bg-orange-500/80 border border-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.4)]"></div>
-            <span className="text-xs text-zinc-300 font-medium tracking-wide">Moderate (Level 4.5 - 7.4)</span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-[3px] sm:rounded-[4px] bg-orange-500/80 border border-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.4)]"></div>
+            <span className="text-[9px] sm:text-xs text-zinc-300 font-medium tracking-wide">Moderate (Level 4.5 - 7.4)</span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-[4px] bg-yellow-500/80 border border-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.3)]"></div>
-            <span className="text-xs text-zinc-300 font-medium tracking-wide">Low Risk (Level 0 - 4.4)</span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-[3px] sm:rounded-[4px] bg-yellow-500/80 border border-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.3)]"></div>
+            <span className="text-[9px] sm:text-xs text-zinc-300 font-medium tracking-wide">Low Risk (Level 0 - 4.4)</span>
           </div>
         </div>
       </div>
 
       {/* Selected Disease Info - Bottom Right */}
-      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl hidden sm:block">
-        <h4 className="text-white font-black text-sm uppercase tracking-widest mb-2 border-b border-white/10 pb-2">
+      <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 max-w-[200px] sm:max-w-xs bg-black/70 p-3 sm:p-5 rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl">
+        <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-1 sm:mb-2 border-b border-white/10 pb-1 sm:pb-2">
           {MOSQUITO_DATA[activeMosquito].name} Vectors
         </h4>
-        <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+        <p className="text-[8px] sm:text-xs text-zinc-400 leading-relaxed mb-2 sm:mb-3">
           Primarily responsible for transmitting <strong className="text-zinc-200">{MOSQUITO_DATA[activeMosquito].diseases}</strong>. 
           The data points highlight current highly active global breeding clusters.
         </p>
@@ -360,10 +360,10 @@ export default function OutbreakGlobe() {
           href={MOSQUITO_DATA[activeMosquito].sourceUrl} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-300 transition-colors underline underline-offset-2 decoration-red-900/50"
+          className="inline-flex items-center gap-1 text-[8px] sm:text-[10px] font-medium text-red-400 hover:text-red-300 transition-colors underline underline-offset-2 decoration-red-900/50"
         >
           Source: {MOSQUITO_DATA[activeMosquito].sourceName}
-          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-2 sm:w-2.5 h-2 sm:h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
         </a>
