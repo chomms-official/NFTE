@@ -145,7 +145,6 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
-  const [flightPath, setFlightPath] = useState<any>(null); // Keep this for the arc!
   const [prevCoords, setPrevCoords] = useState<{lat: number, lng: number} | null>(null);
   const airplaneMeshRef = useRef<THREE.Group | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -175,13 +174,14 @@ export default function OutbreakGlobe() {
       startLat = pov.lat;
       startLng = pov.lng;
     }
+
+    // STRICTLY FLY EASTWARD! (Globe rotates East, so we fly WITH the rotation)
+    let endLng = destLng;
+    if (endLng <= startLng) {
+      endLng += 360;
+    }
     
-    setFlightPath({
-      startLat,
-      startLng,
-      endLat: destLat,
-      endLng: destLng,
-    });
+    const endLat = destLat;
 
     // Hide modal instantly
     setActiveCountry(null);
@@ -189,7 +189,12 @@ export default function OutbreakGlobe() {
     if (globeEl.current) {
       globeEl.current.controls().autoRotate = false;
       const offsetLng = window.innerWidth > 768 ? 25 : 0;
-      globeEl.current.pointOfView({ lat: destLat, lng: destLng + offsetLng, altitude: 1.5 }, 1500);
+      
+      // Calculate flight duration dynamically so it doesn't look too fast if going around the whole globe
+      const lngDiff = endLng - startLng;
+      const flightDuration = Math.max(1500, (lngDiff / 360) * 3500); 
+      
+      globeEl.current.pointOfView({ lat: endLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
       
       // 3D Airplane Animation
       const scene = globeEl.current.scene();
@@ -201,13 +206,30 @@ export default function OutbreakGlobe() {
         scene.add(plane);
       }
       
-      const startCoord = globeEl.current.getCoords(startLat, startLng, 0);
-      const endCoord = globeEl.current.getCoords(destLat, destLng, 0);
+      // Setup Trail
+      const maxTrailPoints = 30;
+      const trailPositions = new Float32Array(maxTrailPoints * 3);
+      const trailColors = new Float32Array(maxTrailPoints * 3);
       
-      const startVec = new THREE.Vector3(startCoord.x, startCoord.y, startCoord.z);
-      const endVec = new THREE.Vector3(endCoord.x, endCoord.y, endCoord.z);
+      // Initialize trail at start pos
+      const initStartCoord = globeEl.current.getCoords(startLat, startLng, 0);
+      for (let i = 0; i < maxTrailPoints; i++) {
+        trailPositions[i * 3] = initStartCoord.x;
+        trailPositions[i * 3 + 1] = initStartCoord.y;
+        trailPositions[i * 3 + 2] = initStartCoord.z;
+        const alpha = 1 - (i / maxTrailPoints);
+        trailColors[i * 3] = alpha;
+        trailColors[i * 3 + 1] = alpha;
+        trailColors[i * 3 + 2] = alpha;
+      }
       
-      const flightDuration = 1500;
+      const trailGeo = new THREE.BufferGeometry();
+      trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+      trailGeo.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+      const trailMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, linewidth: 2 });
+      const trailLine = new THREE.Line(trailGeo, trailMat);
+      scene.add(trailLine);
+      
       const startTime = performance.now();
       const maxAltitude = 25; // 25 units above the globe surface (globe R=100)
       
@@ -215,46 +237,60 @@ export default function OutbreakGlobe() {
         let t = (time - startTime) / flightDuration;
         if (t > 1) t = 1;
         
-        const R = startVec.length();
-        
-        // 1. Interpolate position on the sphere surface (great circle)
-        const currentPos = startVec.clone().lerp(endVec, t).normalize().multiplyScalar(R);
+        // 1. Linearly interpolate Lat/Lng to FORCE Eastward direction
+        const currentLat = startLat + (endLat - startLat) * t;
+        const currentLng = startLng + (endLng - startLng) * t;
         
         // 2. Add parabolic altitude
         const currentAltitude = Math.sin(t * Math.PI) * maxAltitude;
-        const normal = currentPos.clone().normalize();
-        currentPos.add(normal.clone().multiplyScalar(currentAltitude));
+        const currentPos = globeEl.current.getCoords(currentLat, currentLng, currentAltitude / 100);
         
         // 3. Look at the next point slightly ahead
         let tNext = t + 0.05;
         if (tNext > 1) tNext = 1;
-        
-        const nextPosBase = startVec.clone().lerp(endVec, tNext).normalize().multiplyScalar(R);
+        const nextLat = startLat + (endLat - startLat) * tNext;
+        const nextLng = startLng + (endLng - startLng) * tNext;
         const nextAltitude = Math.sin(tNext * Math.PI) * maxAltitude;
-        const nextNormal = nextPosBase.clone().normalize();
-        const nextPos = nextPosBase.add(nextNormal.multiplyScalar(nextAltitude));
+        const nextPos = globeEl.current.getCoords(nextLat, nextLng, nextAltitude / 100);
         
         plane.position.copy(currentPos);
-        plane.up.copy(normal); // Keep the plane's roof pointing away from the earth
-        plane.lookAt(nextPos);
+        const surfacePos = globeEl.current.getCoords(currentLat, currentLng, 0);
+        plane.up.copy(surfacePos).normalize();
+        plane.lookAt(nextPos.x, nextPos.y, nextPos.z);
+        
+        // 4. Update Trail precisely at the tail
+        const tailOffset = new THREE.Vector3(0, 0, 1.5); // Tail is at local +Z 1.5
+        plane.localToWorld(tailOffset); // Convert to world coordinates
+        
+        for (let i = maxTrailPoints - 1; i > 0; i--) {
+          trailPositions[i * 3] = trailPositions[(i - 1) * 3];
+          trailPositions[i * 3 + 1] = trailPositions[(i - 1) * 3 + 1];
+          trailPositions[i * 3 + 2] = trailPositions[(i - 1) * 3 + 2];
+        }
+        trailPositions[0] = tailOffset.x;
+        trailPositions[1] = tailOffset.y;
+        trailPositions[2] = tailOffset.z;
+        trailGeo.attributes.position.needsUpdate = true;
         
         if (t < 1) {
           animationFrameRef.current = requestAnimationFrame(animateFlight);
         } else {
           // Flight ended
           scene.remove(plane);
+          scene.remove(trailLine);
+          trailGeo.dispose();
+          trailMat.dispose();
         }
       };
       
       animationFrameRef.current = requestAnimationFrame(animateFlight);
+      
+      // Wait for flight to finish before showing modal
+      flightTimerRef.current = setTimeout(() => {
+        setActiveCountry(countryFeature);
+        setPrevCoords({ lat: destLat, lng: destLng }); // Store for next flight
+      }, flightDuration);
     }
-    
-    // Wait for flight to finish before showing modal
-    flightTimerRef.current = setTimeout(() => {
-      setActiveCountry(countryFeature);
-      setPrevCoords({ lat: destLat, lng: destLng }); // Store for next flight
-      setFlightPath(null); // Clear glowing arc
-    }, 1500);
   };
 
   // --- TOUR MODE (ATTRACT MODE) ---
@@ -469,20 +505,6 @@ export default function OutbreakGlobe() {
           globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
           backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
           
-          // Flight Path (Arc)
-          arcsData={flightPath ? [flightPath] : []}
-          arcStartLat={(d: any) => d.startLat}
-          arcStartLng={(d: any) => d.startLng}
-          arcEndLat={(d: any) => d.endLat}
-          arcEndLng={(d: any) => d.endLng}
-          arcColor={(d: any) => ['rgba(255, 255, 255, 0)', '#ffffff']}
-          arcAltitude={(d: any) => 0.5}
-          arcDashLength={0.15}
-          arcDashGap={2}
-          arcDashInitialGap={() => 1}
-          arcDashAnimateTime={1500}
-          arcStroke={1.5}
-
           // Polygons (Red, Orange, Yellow)
           polygonsTransitionDuration={0}
           polygonsData={countries}
