@@ -362,7 +362,7 @@ export default function OutbreakGlobe() {
               unit="case"
               unitPlural="cases"
               defaultView="3d"
-              orbit={true}
+              orbit={false}
               title={
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></span>
