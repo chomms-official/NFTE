@@ -100,6 +100,7 @@ function getRiskColorRGBA(risk: number, opacity: number) {
 
 export default function OutbreakGlobe() {
   const globeEl = useRef<any>(null);
+  const isInitialView = useRef(true);
   const [mounted, setMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(800);
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
@@ -191,7 +192,9 @@ export default function OutbreakGlobe() {
       // If no active country, look at the first hotspot of the active mosquito
       if (!activeCountry && MOSQUITO_DATA[activeMosquito].hotspots.length > 0) {
         const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
-        globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, 1500);
+        const ms = isInitialView.current ? 0 : 1500;
+        globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, ms);
+        isInitialView.current = false;
       }
     }
   }, [mounted, activeMosquito, globeEl.current]);
@@ -249,7 +252,10 @@ export default function OutbreakGlobe() {
               // Point to the clicked country
               const centerLat = d.geometry.coordinates[0]?.[0]?.[0]?.[1] || 0;
               const centerLng = d.geometry.coordinates[0]?.[0]?.[0]?.[0] || 0;
-              globeEl.current.pointOfView({ lat: centerLat, lng: centerLng, altitude: 1.5 }, 1000);
+              // Offset lng so country shifts left, making room for the modal on the right
+              // Adding longitude moves the camera East, so the country appears West (Left) on screen
+              const offsetLng = window.innerWidth > 768 ? 25 : 0;
+              globeEl.current.pointOfView({ lat: centerLat, lng: centerLng + offsetLng, altitude: 1.5 }, 1000);
             }
           }}
           onPolygonHover={(d) => {
@@ -384,7 +390,10 @@ export default function OutbreakGlobe() {
           <button 
             onClick={() => {
               setActiveCountry(null);
-              if (globeEl.current) globeEl.current.controls().autoRotate = true;
+              if (globeEl.current) {
+                globeEl.current.controls().autoRotate = true;
+                globeEl.current.controls().autoRotateSpeed = 0.15;
+              }
             }}
             className="absolute top-24 right-4 sm:top-8 sm:right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10 z-[70]"
           >
