@@ -171,11 +171,11 @@ export default function OutbreakGlobe() {
     }
   };
 
-  const handleSelectCountry = (countryFeature: any) => {
+  const handleSelectCountry = (countryFeature: any, isManual = false) => {
     cancelFlight();
     
-    // Explicitly turn off autopilot if user manually selects a country
-    if (autoTourEnabled) {
+    // Explicitly turn off autopilot if user MANUALLY selects a country
+    if (isManual && autoTourEnabled) {
       setAutoTourEnabled(false);
     }
     
@@ -344,8 +344,8 @@ export default function OutbreakGlobe() {
     const globeContainer = document.getElementById('globe-container');
     if (!globeContainer) return;
 
-    // Use pointerdown instead of mousedown/touchstart for better mobile compatibility without blocking clicks
-    const events = ['pointerdown', 'wheel'];
+    // Use touchstart, pointerdown, mousedown for 100% cross-device compatibility
+    const events = ['touchstart', 'pointerdown', 'mousedown', 'wheel'];
     events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true }));
     return () => {
       clearTimeout(interactionTimeout);
@@ -440,6 +440,22 @@ export default function OutbreakGlobe() {
     return () => {
       window.removeEventListener("resize", handleResize);
       cancelFlight();
+      if (airplaneMeshRef.current) {
+        airplaneMeshRef.current.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) {
+              if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(m => m.dispose());
+              } else {
+                mesh.material.dispose();
+              }
+            }
+          }
+        });
+        airplaneMeshRef.current = null;
+      }
     };
   }, []);
 
@@ -557,7 +573,7 @@ export default function OutbreakGlobe() {
             return getRiskColor(d.properties.risk);
           }}
           polygonStrokeColor={() => "#111111"}
-          onPolygonClick={(d: any) => handleSelectCountry(d)}
+          onPolygonClick={(d: any) => handleSelectCountry(d, true)}
           onPolygonHover={(d) => {
             if (globeEl.current && !activeCountry) {
               globeEl.current.controls().autoRotate = !d;
@@ -651,6 +667,9 @@ export default function OutbreakGlobe() {
         <button
           id="auto-tour-btn"
           onClick={() => {
+            if (autoTourEnabled) {
+              cancelFlight();
+            }
             setAutoTourEnabled(!autoTourEnabled);
             if (activeCountry) {
               setActiveCountry(null);
