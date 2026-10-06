@@ -109,6 +109,103 @@ export default function OutbreakGlobe() {
 
   const [windowHeight, setWindowHeight] = useState(800);
 
+  // --- TOUR MODE (ATTRACT MODE) ---
+  const [isIdle, setIsIdle] = useState(false);
+  const idleTimerRef = useRef<any>(null);
+  const tourIntervalRef = useRef<any>(null);
+  const tourMosquitoOrder: MosquitoType[] = ["aedes", "anopheles", "culex"];
+  const tourMosquitoIndexRef = useRef(0);
+  const tourCountryIndexRef = useRef(0);
+  const tourCountriesRef = useRef<any[]>([]);
+
+  // 1. Detect Idle Time
+  useEffect(() => {
+    const resetIdle = () => {
+      setIsIdle(false);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        setIsIdle(true);
+      }, 5000);
+    };
+
+    resetIdle();
+    const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'wheel', 'click'];
+    events.forEach(e => window.addEventListener(e, resetIdle, { passive: true }));
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      events.forEach(e => window.removeEventListener(e, resetIdle));
+    };
+  }, []);
+
+  // 2. Handle Tour Loop
+  useEffect(() => {
+    if (!isIdle || geoJsonData.length === 0) {
+      if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
+      // When user interrupts tour, reset rotation (unless they are interacting with a country)
+      if (!isIdle && globeEl.current && !activeCountry) {
+        globeEl.current.controls().autoRotate = true;
+      }
+      return;
+    }
+
+    const focusCountry = (countryFeature: any) => {
+      setActiveCountry(countryFeature);
+      if (globeEl.current) {
+        globeEl.current.controls().autoRotate = false;
+        const centerLat = countryFeature.geometry.coordinates[0]?.[0]?.[0]?.[1] || 0;
+        const centerLng = countryFeature.geometry.coordinates[0]?.[0]?.[0]?.[0] || 0;
+        const offsetLng = window.innerWidth > 768 ? 25 : 0;
+        globeEl.current.pointOfView({ lat: centerLat, lng: centerLng + offsetLng, altitude: 1.5 }, 1000);
+      }
+    };
+
+    const startTourCycle = () => {
+      const currentMosquito = tourMosquitoOrder[tourMosquitoIndexRef.current];
+      setActiveMosquito(currentMosquito);
+      
+      const riskMap = MOSQUITO_DATA[currentMosquito].riskMap;
+      const highRiskFeatures = geoJsonData
+        .filter(f => riskMap[f.properties.ADMIN || f.properties.NAME] !== undefined)
+        .map(f => ({ ...f, tourRisk: riskMap[f.properties.ADMIN || f.properties.NAME], properties: { ...f.properties, risk: riskMap[f.properties.ADMIN || f.properties.NAME] } }))
+        .sort((a, b) => b.tourRisk - a.tourRisk)
+        .slice(0, 10);
+        
+      // Shuffle top 10
+      for (let i = highRiskFeatures.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [highRiskFeatures[i], highRiskFeatures[j]] = [highRiskFeatures[j], highRiskFeatures[i]];
+      }
+      
+      tourCountriesRef.current = highRiskFeatures;
+      tourCountryIndexRef.current = 0;
+      
+      if (tourCountriesRef.current.length > 0) {
+        focusCountry(tourCountriesRef.current[0]);
+      }
+    };
+
+    const nextTourStep = () => {
+      tourCountryIndexRef.current++;
+      if (tourCountryIndexRef.current >= tourCountriesRef.current.length) {
+        tourMosquitoIndexRef.current = (tourMosquitoIndexRef.current + 1) % tourMosquitoOrder.length;
+        startTourCycle();
+      } else {
+        focusCountry(tourCountriesRef.current[tourCountryIndexRef.current]);
+      }
+    };
+
+    // First time entering idle => start at aedes
+    tourMosquitoIndexRef.current = 0;
+    startTourCycle();
+    
+    // Give time to read before switching
+    tourIntervalRef.current = setInterval(nextTourStep, 6000);
+
+    return () => {
+      if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
+    };
+  }, [isIdle, geoJsonData]);
+
   // Responsive setup
   useEffect(() => {
     setMounted(true);
