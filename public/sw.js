@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mozziemap-cache-v1';
+const CACHE_NAME = 'mozziemap-cache-v2';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -43,7 +43,7 @@ self.addEventListener('fetch', (event) => {
 
   // For HTML navigation requests (e.g. hitting the page URL)
   // Use Network First, fallback to cache if offline
-  if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
+  if (event.request.mode === 'navigate' || (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'))) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
