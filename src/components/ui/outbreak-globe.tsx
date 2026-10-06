@@ -114,7 +114,16 @@ export default function OutbreakGlobe() {
     fetch("https://raw.githubusercontent.com/vasturiano/react-globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson")
       .then(res => res.json())
       .then(data => {
-        setGeoJsonData(data.features);
+        // Fix: Remove internal holes (lakes/ice sheets) from GeoJSON to prevent "white/black block" artifacts
+        const cleanedFeatures = data.features.map((f: any) => {
+          if (f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0) {
+            f.geometry.coordinates = [f.geometry.coordinates[0]];
+          } else if (f.geometry.type === "MultiPolygon" && f.geometry.coordinates.length > 0) {
+            f.geometry.coordinates = f.geometry.coordinates.map((polygon: any) => [polygon[0]]);
+          }
+          return f;
+        });
+        setGeoJsonData(cleanedFeatures);
       });
       
     return () => window.removeEventListener("resize", handleResize);
@@ -243,12 +252,21 @@ export default function OutbreakGlobe() {
             </div>
           `}
 
-          // Active Pulsing Hotspots
+          // Active Pulsing Hotspots (3D Extruded Alerts)
           ringsData={ringData}
           ringColor="color"
           ringMaxRadius="maxR"
           ringPropagationSpeed="propagationSpeed"
           ringRepeatPeriod="repeatPeriod"
+          ringAltitude={0.015} // Elevate above country polygons
+          
+          pointsData={ringData}
+          pointLat="lat"
+          pointLng="lng"
+          pointColor="color"
+          pointAltitude={(d: any) => (d.weight / 10) * 0.15} // 3D extrusion height based on weight
+          pointRadius={0.35}
+          pointResolution={32}
         />
       </div>
 
