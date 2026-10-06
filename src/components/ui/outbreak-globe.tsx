@@ -303,7 +303,8 @@ export default function OutbreakGlobe() {
   // Compute skyline historical data for the clicked country
   const countryData = useMemo<ContributionDay[]>(() => {
     if (!activeCountry) return [];
-    const seed = activeCountry.properties.ADMIN.length * 10 + (activeMosquito.length * 5);
+    const countryName = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
+    const seed = countryName.length * 10 + (activeMosquito.length * 5);
     const risk = activeCountry.properties.risk;
     const raw = generateContributions(Date.now(), seed, 365);
     
@@ -338,11 +339,15 @@ export default function OutbreakGlobe() {
           polygonsData={countries}
           polygonAltitude={0.005}
           polygonCapColor={(d: any) => {
-            if (activeCountry && d.properties.ADMIN === activeCountry.properties.ADMIN) return "#ffffff"; 
+            const countryName = activeCountry ? (activeCountry.properties.ADMIN || activeCountry.properties.NAME) : "";
+            const dName = d.properties.ADMIN || d.properties.NAME;
+            if (activeCountry && dName === countryName) return "#ffffff"; 
             return getRiskColor(d.properties.risk);
           }}
           polygonSideColor={(d: any) => {
-            if (activeCountry && d.properties.ADMIN === activeCountry.properties.ADMIN) return "#ffffff"; 
+            const countryName = activeCountry ? (activeCountry.properties.ADMIN || activeCountry.properties.NAME) : "";
+            const dName = d.properties.ADMIN || d.properties.NAME;
+            if (activeCountry && dName === countryName) return "#ffffff"; 
             return getRiskColor(d.properties.risk);
           }}
           polygonStrokeColor={() => "#111111"}
@@ -368,7 +373,7 @@ export default function OutbreakGlobe() {
           }}
           polygonLabel={(d: any) => `
             <div style="background: rgba(10,10,10,0.95); border: 1px solid #3f3f46; border-radius: 12px; padding: 12px; font-family: sans-serif; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-              <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN}</div>
+              <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN || d.properties.NAME || "Unknown"}</div>
               <div style="color: ${getRiskColor(d.properties.risk)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
                 ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
               </div>
@@ -509,7 +514,7 @@ export default function OutbreakGlobe() {
               return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
             })()}
             <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
-              {activeCountry.properties.ADMIN}
+              {activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}
             </h2>
           </div>
           
@@ -554,7 +559,7 @@ export default function OutbreakGlobe() {
 
           <div className="mt-10 text-zinc-400 text-xs sm:text-sm leading-relaxed border-t border-white/10 pt-6 sm:pt-8 max-w-2xl">
             <p className="mb-3">
-              This historical data visualization represents the recorded <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN}</strong> over the past 12 months. 
+              This historical data visualization represents the recorded <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}</strong> over the past 12 months. 
               The 3D skyline map highlights severe spikes and seasonal trends corresponding to mosquito breeding seasons.
             </p>
             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5">
