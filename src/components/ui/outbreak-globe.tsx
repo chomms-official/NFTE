@@ -530,15 +530,20 @@ export default function OutbreakGlobe() {
     const risk = activeCountry.properties.risk;
     const raw = generateContributions(Date.now(), seed, 365);
     
-    const riskMultiplier = risk < 4.5 
-      ? (risk * risk) * 0.1 
-      : risk < 7.5 
-        ? (risk * risk) * 2 
-        : (risk * risk) * 15;
+    // Fix: Accurate and realistic data scaling based on population!
+    const popStr = activeCountry.properties.POP_EST || activeCountry.properties.POP_EST_ || 0;
+    const population = Number(popStr) || 1000000;
+    
+    // A risk of 10 means 10% of the population gets infected over the year.
+    // A risk of 5 means (0.5^3) * 10% = 1.25% of the population gets infected.
+    // This prevents impossible scenarios where cases exceed population.
+    const rawYearlySum = raw.reduce((acc, d) => acc + d.count, 0) || 2000;
+    const targetYearlyCases = population * Math.pow((risk / 10), 3) * 0.10;
+    const riskMultiplier = targetYearlyCases / rawYearlySum;
 
     return raw.map((d) => ({
       date: d.date,
-      count: d.count === 0 ? 0 : Math.floor(d.count * riskMultiplier + Math.random() * riskMultiplier * 0.5)
+      count: d.count === 0 ? 0 : Math.floor(d.count * riskMultiplier * (0.8 + Math.random() * 0.4))
     }));
   }, [activeCountry, activeMosquito]);
 
@@ -740,7 +745,7 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute bottom-0 md:top-0 right-0 h-[85dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 rounded-t-3xl md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
+        <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
           
           {/* Fixed Header with Close Button */}
           <div className="flex justify-end p-4 pt-6 md:p-8 shrink-0">
