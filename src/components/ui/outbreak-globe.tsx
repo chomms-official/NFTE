@@ -152,8 +152,10 @@ export default function OutbreakGlobe() {
       setActiveCountry(countryFeature);
       if (globeEl.current) {
         globeEl.current.controls().autoRotate = false;
-        const centerLat = countryFeature.geometry.coordinates[0]?.[0]?.[0]?.[1] || 0;
-        const centerLng = countryFeature.geometry.coordinates[0]?.[0]?.[0]?.[0] || 0;
+        let pt = countryFeature.geometry.coordinates;
+        while (pt && Array.isArray(pt[0])) pt = pt[0];
+        const centerLng = pt[0] || 0;
+        const centerLat = pt[1] || 0;
         const offsetLng = window.innerWidth > 768 ? 25 : 0;
         globeEl.current.pointOfView({ lat: centerLat, lng: centerLng + offsetLng, altitude: 1.5 }, 1000);
       }
@@ -247,7 +249,9 @@ export default function OutbreakGlobe() {
       
       if (risk === undefined) {
         // Fallback default logic based on mosquito type
-        const lat = f.geometry.coordinates?.[0]?.[0]?.[0]?.[1] || 0;
+        let pt = f.geometry.coordinates;
+        while (pt && Array.isArray(pt[0])) pt = pt[0];
+        const lat = pt[1] || 0;
         const absLat = Math.abs(lat);
         
         if (activeMosquito === "aedes") {
@@ -347,8 +351,10 @@ export default function OutbreakGlobe() {
             if (globeEl.current) {
               globeEl.current.controls().autoRotate = false;
               // Point to the clicked country
-              const centerLat = d.geometry.coordinates[0]?.[0]?.[0]?.[1] || 0;
-              const centerLng = d.geometry.coordinates[0]?.[0]?.[0]?.[0] || 0;
+              let pt = d.geometry.coordinates;
+              while (pt && Array.isArray(pt[0])) pt = pt[0];
+              const centerLng = pt[0] || 0;
+              const centerLat = pt[1] || 0;
               // Offset lng so country shifts left, making room for the modal on the right
               // Adding longitude moves the camera East, so the country appears West (Left) on screen
               const offsetLng = window.innerWidth > 768 ? 25 : 0;
