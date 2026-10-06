@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { XIcon, ActivityIcon } from "lucide-react";
+import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-react";
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
@@ -14,273 +14,357 @@ const Globe = dynamic(() => import("react-globe.gl"), {
   ),
 });
 
-// Accurate real-world dengue/malaria risk levels (0 to 10 scale)
-const REAL_WORLD_RISK: Record<string, number> = {
-  // Severe / Endemic (Red)
-  "Brazil": 9.8,
-  "India": 9.5,
-  "Indonesia": 9.2,
-  "Nigeria": 9.0,
-  "Philippines": 8.8,
-  "Democratic Republic of the Congo": 8.7,
-  "Bangladesh": 8.5,
-  "Thailand": 8.3,
-  "Vietnam": 8.1,
-  "Colombia": 7.9,
-  "Peru": 7.7,
-  "Mexico": 7.5,
-  
-  // Moderate Warning (Yellow)
-  "Malaysia": 7.2,
-  "Kenya": 6.8,
-  "Pakistan": 6.5,
-  "Argentina": 6.2,
-  "Ecuador": 5.9,
-  "Saudi Arabia": 5.5,
-  "South Africa": 5.0,
-  "China": 4.8,
-  "Egypt": 4.5,
-  
-  // Safe / Low Risk (Green)
-  "United States of America": 3.0,
-  "Canada": 1.0,
-  "United Kingdom": 0.5,
-  "France": 1.5,
-  "Germany": 1.2,
-  "Russia": 0.8,
-  "Japan": 2.5,
-  "South Korea": 2.2,
-  "Australia": 3.5,
-  "New Zealand": 1.0,
-  "Norway": 0.1,
-  "Sweden": 0.2,
+type MosquitoType = "aedes" | "anopheles" | "culex";
+
+const MOSQUITO_DATA: Record<MosquitoType, {
+  name: string;
+  diseases: string;
+  icon: any;
+  riskMap: Record<string, number>;
+  hotspots: Array<{lat: number, lng: number, city: string, weight: number}>;
+}> = {
+  aedes: {
+    name: "AEDES",
+    diseases: "Dengue, Chikungunya, Zika, Yellow Fever",
+    icon: DropletsIcon, // Represents blood/tropical rain
+    riskMap: {
+      "Brazil": 9.8, "India": 9.5, "Indonesia": 9.2, "Philippines": 8.8,
+      "Thailand": 8.5, "Vietnam": 8.1, "Bangladesh": 8.0, "Colombia": 7.9, 
+      "Nigeria": 7.5, "Democratic Republic of the Congo": 7.0, "Mexico": 6.8,
+      "Malaysia": 7.2, "Argentina": 6.2, "Pakistan": 5.5, "Saudi Arabia": 5.0,
+      "United States of America": 3.5,
+    },
+    hotspots: [
+      { lat: -23.5505, lng: -46.6333, city: "São Paulo, Brazil", weight: 9.8 },
+      { lat: 13.7563, lng: 100.5018, city: "Bangkok, Thailand", weight: 8.5 },
+      { lat: -6.2088, lng: 106.8456, city: "Jakarta, Indonesia", weight: 9.2 },
+      { lat: 14.5995, lng: 120.9842, city: "Manila, Philippines", weight: 8.8 },
+    ]
+  },
+  anopheles: {
+    name: "ANOPHELES",
+    diseases: "Malaria",
+    icon: BugIcon,
+    riskMap: {
+      "Nigeria": 9.9, "Democratic Republic of the Congo": 9.8, "Uganda": 9.5, 
+      "Mozambique": 9.2, "Angola": 8.9, "Burkina Faso": 8.7, "Mali": 8.5,
+      "India": 7.8, "Papua New Guinea": 8.0, "Brazil": 6.5, "Colombia": 5.5,
+      "Pakistan": 6.0, "Indonesia": 6.5, "Myanmar": 7.0,
+      "United States of America": 0.5, "China": 1.0, "Thailand": 3.0, "Argentina": 1.0
+    },
+    hotspots: [
+      { lat: 9.0820, lng: 8.6753, city: "Abuja, Nigeria", weight: 9.9 },
+      { lat: -4.3224, lng: 15.3070, city: "Kinshasa, DRC", weight: 9.8 },
+      { lat: 0.3476, lng: 32.5825, city: "Kampala, Uganda", weight: 9.5 },
+      { lat: -25.9692, lng: 32.5732, city: "Maputo, Mozambique", weight: 9.2 },
+    ]
+  },
+  culex: {
+    name: "CULEX",
+    diseases: "Japanese Encephalitis (JE), West Nile Virus",
+    icon: WindIcon, // Represents airborne/widespread
+    riskMap: {
+      "United States of America": 7.5, "China": 8.0, "India": 8.5, "Italy": 6.5,
+      "Greece": 6.0, "Egypt": 6.5, "Vietnam": 7.8, "Thailand": 7.5, 
+      "Indonesia": 7.0, "Philippines": 7.0, "Japan": 5.0, "South Korea": 5.5,
+      "Russia": 4.0, "Brazil": 3.0, "Nigeria": 4.0, "Australia": 5.0
+    },
+    hotspots: [
+      { lat: 39.9042, lng: 116.4074, city: "Beijing, China", weight: 8.0 },
+      { lat: 28.6139, lng: 77.2090, city: "New Delhi, India", weight: 8.5 },
+      { lat: 40.7128, lng: -74.0060, city: "New York, USA", weight: 7.5 },
+      { lat: 41.9028, lng: 12.4964, city: "Rome, Italy", weight: 6.5 },
+    ]
+  }
 };
 
-// Hotspots for pulsing rings
-const HOTSPOTS = [
-  { lat: -23.5505, lng: -46.6333, city: "São Paulo, Brazil", weight: 9.8 },
-  { lat: 13.7563, lng: 100.5018, city: "Bangkok, Thailand", weight: 8.3 },
-  { lat: -6.2088, lng: 106.8456, city: "Jakarta, Indonesia", weight: 9.2 },
-  { lat: 14.5995, lng: 120.9842, city: "Manila, Philippines", weight: 8.8 },
-  { lat: 19.076, lng: 72.8777, city: "Mumbai, India", weight: 9.5 },
-  { lat: 6.5244, lng: 3.3792, city: "Lagos, Nigeria", weight: 9.0 },
-];
+function getRiskColor(risk: number, opacity: number) {
+  if (risk >= 7.5) return `rgba(220, 38, 38, ${opacity})`; // Red
+  if (risk >= 4.5) return `rgba(249, 115, 22, ${opacity})`; // Orange
+  return `rgba(234, 179, 8, ${opacity})`; // Yellow
+}
 
 export default function OutbreakGlobe() {
   const globeEl = useRef<any>(null);
   const [mounted, setMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(800);
-  const [countries, setCountries] = useState<{ features: any[] }>({ features: [] });
+  const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
+  const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
 
+  // Responsive setup
   useEffect(() => {
     setMounted(true);
     const handleResize = () => setWindowWidth(window.innerWidth);
     handleResize();
     window.addEventListener("resize", handleResize);
     
-    // Load GeoJSON for countries
+    // Fetch topology only once
     fetch("https://raw.githubusercontent.com/vasturiano/react-globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson")
       .then(res => res.json())
       .then(data => {
-        const features = data.features.map((f: any) => {
-          const name = f.properties.ADMIN || f.properties.NAME;
-          let risk = REAL_WORLD_RISK[name];
-          
-          if (risk === undefined) {
-            // Calculate a plausible risk based on latitude (tropics = higher risk)
-            const lat = f.geometry.coordinates?.[0]?.[0]?.[0]?.[1] || 0;
-            const absLat = Math.abs(lat);
-            if (absLat < 30) risk = Math.random() * 3 + 6.0; // Tropics: 6-9
-            else if (absLat < 45) risk = Math.random() * 3 + 3.0; // Subtropics: 3-6
-            else risk = Math.random() * 2; // Cold: 0-2
-          }
-          
-          return { ...f, properties: { ...f.properties, risk } };
-        });
-        setCountries({ features });
+        setGeoJsonData(data.features);
       });
       
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Compute countries with currently selected mosquito risk data
+  const countries = useMemo(() => {
+    if (!geoJsonData.length) return [];
+    
+    const currentData = MOSQUITO_DATA[activeMosquito].riskMap;
+    
+    return geoJsonData.map((f: any) => {
+      const name = f.properties.ADMIN || f.properties.NAME;
+      let risk = currentData[name];
+      
+      if (risk === undefined) {
+        // Fallback default logic based on mosquito type
+        const lat = f.geometry.coordinates?.[0]?.[0]?.[0]?.[1] || 0;
+        const absLat = Math.abs(lat);
+        
+        if (activeMosquito === "aedes") {
+          risk = absLat < 35 ? Math.random() * 3 + 2 : Math.random();
+        } else if (activeMosquito === "anopheles") {
+          risk = absLat < 20 ? Math.random() * 2 + 1 : Math.random();
+        } else {
+          // Culex is more widespread
+          risk = absLat < 50 ? Math.random() * 3 + 2 : Math.random();
+        }
+      }
+      
+      return { ...f, properties: { ...f.properties, risk } };
+    });
+  }, [geoJsonData, activeMosquito]);
+
+  // Compute hotspots for the active mosquito
   const ringData = useMemo(() => {
-    return HOTSPOTS.map(spot => ({
+    return MOSQUITO_DATA[activeMosquito].hotspots.map(spot => ({
       lat: spot.lat,
       lng: spot.lng,
       maxR: spot.weight * 1.2,
       propagationSpeed: (spot.weight / 10) * 3,
       repeatPeriod: 1000 - (spot.weight * 50),
-      color: "#ff1a1a" // Bright red pulse
+      color: "#ff1a1a", // Hotspots are always alarming red
+      city: spot.city,
+      weight: spot.weight
     }));
-  }, []);
+  }, [activeMosquito]);
 
+  // Setup globe controls on mount/change
   useEffect(() => {
     if (globeEl.current && mounted) {
       const controls = globeEl.current.controls();
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.5; 
       controls.enableZoom = true;
-      globeEl.current.pointOfView({ lat: 15, lng: 100, altitude: 2 }, 2000);
+      
+      // If no active country, look at the first hotspot of the active mosquito
+      if (!activeCountry && MOSQUITO_DATA[activeMosquito].hotspots.length > 0) {
+        const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
+        globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, 1500);
+      }
     }
-  }, [mounted, globeEl.current]);
+  }, [mounted, activeMosquito, globeEl.current]);
 
+  // Compute skyline historical data for the clicked country
   const countryData = useMemo<ContributionDay[]>(() => {
     if (!activeCountry) return [];
-    const seed = activeCountry.properties.ADMIN.length * 10;
+    const seed = activeCountry.properties.ADMIN.length * 10 + (activeMosquito.length * 5);
     const risk = activeCountry.properties.risk;
     const raw = generateContributions(Date.now(), seed, 365);
     return raw.map((d) => ({
       date: d.date,
       count: d.count === 0 ? 0 : Math.floor(d.count * (risk * 250) + Math.random() * (risk * 50))
     }));
-  }, [activeCountry]);
+  }, [activeCountry, activeMosquito]);
 
   if (!mounted) return null;
 
   return (
-    <div className="relative w-full h-[700px] flex items-center justify-center cursor-move overflow-hidden rounded-2xl border border-red-900/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black shadow-[0_0_80px_rgba(220,38,38,0.15)]">
-      <Globe
-        ref={globeEl}
-        width={Math.min(windowWidth - 40, 1400)}
-        height={700}
-        backgroundColor="rgba(0,0,0,0)"
-        // Using earth-blue-marble so the ocean is vividly blue
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
-        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
-        
-        // Polygons for countries (Red / Yellow / Green)
-        polygonsData={countries.features}
-        polygonAltitude={(d: any) => d === activeCountry ? 0.06 : 0.015}
-        polygonCapColor={(d: any) => {
-          if (d === activeCountry) return "rgba(255, 255, 255, 0.9)"; // White highlight on click
-          const risk = d.properties.risk;
-          if (risk >= 7.5) return "rgba(220, 38, 38, 0.75)";  // Red (Severe)
-          if (risk >= 4.5) return "rgba(234, 179, 8, 0.7)";   // Yellow (Moderate)
-          return "rgba(34, 197, 94, 0.6)";                    // Green (Safe)
-        }}
-        polygonSideColor={() => "rgba(0,0,0,0.4)"}
-        polygonStrokeColor={() => "rgba(0,0,0,0.5)"}
-        onPolygonClick={(d) => {
-          setActiveCountry(d);
-          if (globeEl.current) {
-            globeEl.current.controls().autoRotate = false;
-          }
-        }}
-        onPolygonHover={(d) => {
-          if (globeEl.current) {
-            globeEl.current.controls().autoRotate = !d && !activeCountry;
-          }
-        }}
-        polygonLabel={(d: any) => `
-          <div style="background: rgba(0,0,0,0.9); border: 1px solid #ffffff33; border-radius: 8px; padding: 10px; font-family: sans-serif; pointer-events: none;">
-            <div style="color: white; font-size: 16px; margin-bottom: 4px; font-weight: bold;">${d.properties.ADMIN}</div>
-            <div style="color: ${d.properties.risk >= 7.5 ? '#ef4444' : d.properties.risk >= 4.5 ? '#eab308' : '#22c55e'}; font-size: 13px; font-weight: bold;">
-              Risk Level: ${d.properties.risk.toFixed(1)} / 10
-            </div>
-            <div style="color: #a1a1aa; font-size: 11px; margin-top: 4px;">Click to view historical outbreak data</div>
-          </div>
-        `}
-
-        // Live Warning Rings
-        ringsData={ringData}
-        ringColor="color"
-        ringMaxRadius="maxR"
-        ringPropagationSpeed="propagationSpeed"
-        ringRepeatPeriod="repeatPeriod"
-      />
+    <div className="relative w-full h-[800px] flex items-center justify-center overflow-hidden rounded-2xl border border-zinc-800/80 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black shadow-2xl">
       
-      {/* Overlay UI - Top Left */}
-      <div className="absolute top-6 left-6 flex flex-col gap-2 pointer-events-none">
-        <div className="flex items-center gap-3 bg-zinc-950/80 px-4 py-2 rounded-full border border-red-900/50 backdrop-blur-md">
-          <span className="w-3 h-3 rounded-full bg-red-500 animate-ping absolute"></span>
-          <span className="w-3 h-3 rounded-full bg-red-500 relative"></span>
-          <span className="text-red-500 font-bold text-sm tracking-widest uppercase">Live Global Feed</span>
-        </div>
+      <div className="absolute inset-0 cursor-move">
+        <Globe
+          ref={globeEl}
+          width={windowWidth > 1400 ? 1400 : windowWidth - 40}
+          height={800}
+          backgroundColor="rgba(0,0,0,0)"
+          globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
+          backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+          
+          // Polygons (Red, Orange, Yellow)
+          polygonsData={countries}
+          polygonAltitude={(d: any) => d.properties.ADMIN === activeCountry?.properties?.ADMIN ? 0.08 : 0.015}
+          polygonCapColor={(d: any) => {
+            if (d.properties.ADMIN === activeCountry?.properties?.ADMIN) return "rgba(255, 255, 255, 0.9)"; 
+            return getRiskColor(d.properties.risk, 0.75);
+          }}
+          polygonSideColor={(d: any) => getRiskColor(d.properties.risk, 0.2)}
+          polygonStrokeColor={() => "rgba(0,0,0,0.5)"}
+          onPolygonClick={(d: any) => {
+            setActiveCountry(d);
+            if (globeEl.current) {
+              globeEl.current.controls().autoRotate = false;
+              // Point to the clicked country
+              const centerLat = d.geometry.coordinates[0]?.[0]?.[0]?.[1] || 0;
+              const centerLng = d.geometry.coordinates[0]?.[0]?.[0]?.[0] || 0;
+              globeEl.current.pointOfView({ lat: centerLat, lng: centerLng, altitude: 1.5 }, 1000);
+            }
+          }}
+          onPolygonHover={(d) => {
+            if (globeEl.current && !activeCountry) {
+              globeEl.current.controls().autoRotate = !d;
+            }
+          }}
+          polygonLabel={(d: any) => `
+            <div style="background: rgba(10,10,10,0.95); border: 1px solid #3f3f46; border-radius: 12px; padding: 12px; font-family: sans-serif; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+              <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN}</div>
+              <div style="color: ${getRiskColor(d.properties.risk, 1)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
+                ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
+              </div>
+              <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view historical outbreak data</div>
+            </div>
+          `}
+
+          // Active Pulsing Hotspots
+          ringsData={ringData}
+          ringColor="color"
+          ringMaxRadius="maxR"
+          ringPropagationSpeed="propagationSpeed"
+          ringRepeatPeriod="repeatPeriod"
+        />
+      </div>
+
+      {/* TOP CONTROLS: Mosquito Selectors */}
+      <div className="absolute top-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-3 bg-black/60 p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-10 w-max">
+        {(Object.entries(MOSQUITO_DATA) as [MosquitoType, any][]).map(([key, data]) => {
+          const isActive = activeMosquito === key;
+          const Icon = data.icon;
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                setActiveMosquito(key);
+                setActiveCountry(null); // Reset selection on change
+              }}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${
+                isActive 
+                  ? "bg-red-600/90 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-500 scale-105" 
+                  : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 border border-transparent"
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? "animate-pulse" : ""}`} />
+              <div className="flex flex-col items-start text-left">
+                <span className="leading-none">{data.name}</span>
+                <span className={`text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
+                  {data.diseases.split(",")[0]}
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
-      <div className="absolute bottom-6 left-6 bg-zinc-950/80 p-5 rounded-xl border border-white/10 backdrop-blur-md pointer-events-none">
-        <h4 className="text-zinc-100 font-bold text-sm uppercase tracking-widest mb-3">Outbreak Risk by Country</h4>
-        <div className="flex flex-col gap-3">
+      <div className="absolute bottom-6 left-6 bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+        <h4 className="text-white font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+          <ActivityIcon className="w-4 h-4 text-red-500" /> 
+          Risk Heatmap (Live)
+        </h4>
+        <div className="flex flex-col gap-3.5">
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-red-600/75 border border-red-500"></div>
-            <span className="text-xs text-zinc-300 font-medium">Severe / Endemic (Level 7.5 - 10)</span>
+            <div className="w-5 h-5 rounded-[4px] bg-red-600/80 border border-red-400 shadow-[0_0_12px_rgba(220,38,38,0.6)]"></div>
+            <span className="text-xs text-zinc-200 font-semibold tracking-wide">Severe (Level 7.5 - 10)</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-yellow-500/70 border border-yellow-400"></div>
-            <span className="text-xs text-zinc-300 font-medium">Moderate Warning (Level 4.5 - 7.4)</span>
+            <div className="w-5 h-5 rounded-[4px] bg-orange-500/80 border border-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.4)]"></div>
+            <span className="text-xs text-zinc-300 font-medium tracking-wide">Moderate (Level 4.5 - 7.4)</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-sm bg-green-500/60 border border-green-400"></div>
-            <span className="text-xs text-zinc-300 font-medium">Safe / Low Risk (Level 0 - 4.4)</span>
+            <div className="w-5 h-5 rounded-[4px] bg-yellow-500/80 border border-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.3)]"></div>
+            <span className="text-xs text-zinc-300 font-medium tracking-wide">Low Risk (Level 0 - 4.4)</span>
           </div>
         </div>
+      </div>
+
+      {/* Selected Disease Info - Bottom Right */}
+      <div className="absolute bottom-6 right-6 max-w-xs bg-black/70 p-5 rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+        <h4 className="text-white font-black text-sm uppercase tracking-widest mb-2 border-b border-white/10 pb-2">
+          {MOSQUITO_DATA[activeMosquito].name} Vectors
+        </h4>
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Primarily responsible for transmitting <strong className="text-zinc-200">{MOSQUITO_DATA[activeMosquito].diseases}</strong>. 
+          The data points highlight current highly active global breeding clusters.
+        </p>
       </div>
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute top-0 right-0 h-full w-full max-w-[800px] bg-zinc-950/95 border-l border-red-900/50 backdrop-blur-xl shadow-2xl p-6 sm:p-8 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500">
+        <div className="absolute top-0 right-0 h-full w-full max-w-[850px] bg-black/80 border-l border-white/10 backdrop-blur-2xl shadow-2xl p-6 sm:p-10 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-500 z-50">
           <button 
             onClick={() => {
               setActiveCountry(null);
               if (globeEl.current) globeEl.current.controls().autoRotate = true;
             }}
-            className="absolute top-6 right-6 p-2 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-full transition-colors z-50"
+            className="absolute top-8 right-8 p-3 bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white rounded-full transition-all duration-300 backdrop-blur-md border border-white/10"
           >
             <XIcon className="w-6 h-6" />
           </button>
 
-          <div className="flex items-center gap-3 mb-2">
-            <ActivityIcon className={activeCountry.properties.risk >= 7.5 ? "text-red-500 w-8 h-8" : activeCountry.properties.risk >= 4.5 ? "text-yellow-500 w-8 h-8" : "text-green-500 w-8 h-8"} />
-            <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          <div className="flex items-center gap-4 mb-4 mt-4">
+            {(() => {
+              const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
+              return <Icon className="w-10 h-10" style={{ color: getRiskColor(activeCountry.properties.risk, 1) }} />;
+            })()}
+            <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
               {activeCountry.properties.ADMIN}
             </h2>
           </div>
           
-          <div className="flex items-center gap-4 mb-8">
-            <span className={`px-3 py-1 bg-black/50 border rounded-full text-sm font-bold ${
-              activeCountry.properties.risk >= 7.5 ? "border-red-900 text-red-500" : 
-              activeCountry.properties.risk >= 4.5 ? "border-yellow-900 text-yellow-500" : 
-              "border-green-900 text-green-500"
-            }`}>
+          <div className="flex flex-wrap items-center gap-4 mb-10">
+            <span 
+              className="px-4 py-2 border rounded-full text-sm font-black uppercase tracking-widest"
+              style={{ 
+                borderColor: getRiskColor(activeCountry.properties.risk, 0.5), 
+                color: getRiskColor(activeCountry.properties.risk, 1),
+                backgroundColor: getRiskColor(activeCountry.properties.risk, 0.1)
+              }}
+            >
               Risk Level: {activeCountry.properties.risk.toFixed(1)} / 10
             </span>
-            <span className="text-zinc-400 text-sm">
+            <span className="text-zinc-400 text-sm font-medium tracking-wide bg-white/5 px-4 py-2 rounded-full border border-white/5">
               Population: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
             </span>
           </div>
 
-          <div className="w-full p-2 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 shadow-[0_0_30px_rgba(0,0,0,0.5)] ring-1 ring-zinc-800">
+          <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></div>
+            
             <ContributionSkyline 
               data={countryData}
-              palette={activeCountry.properties.risk >= 7.5 ? "danger" : activeCountry.properties.risk >= 4.5 ? "halloween" : "github"}
+              palette={activeCountry.properties.risk >= 7.5 ? "danger" : activeCountry.properties.risk >= 4.5 ? "ember" : "halloween"}
               unit="case"
               unitPlural="cases"
               defaultView="3d"
               orbit={true}
               title={
                 <div className="flex items-center space-x-2">
-                  <span className={`w-2 h-2 rounded-full animate-ping absolute ${
-                    activeCountry.properties.risk >= 7.5 ? "bg-red-500" : 
-                    activeCountry.properties.risk >= 4.5 ? "bg-yellow-500" : 
-                    "bg-green-500"
-                  }`}></span>
-                  <span className={`w-2 h-2 rounded-full relative ${
-                    activeCountry.properties.risk >= 7.5 ? "bg-red-500" : 
-                    activeCountry.properties.risk >= 4.5 ? "bg-yellow-500" : 
-                    "bg-green-500"
-                  }`}></span>
-                  <span className="font-bold text-zinc-100 tracking-wide uppercase text-xs">National Outbreak History</span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk, 1) }}></span>
+                  <span className="font-bold text-white tracking-widest uppercase text-xs">
+                    {MOSQUITO_DATA[activeMosquito].name} Outbreak History
+                  </span>
                 </div>
               }
-              className="border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm"
+              className="border-none bg-transparent"
             />
           </div>
 
-          <div className="mt-8 text-zinc-400 text-sm leading-relaxed border-t border-zinc-800 pt-6">
+          <div className="mt-10 text-zinc-400 text-sm leading-relaxed border-t border-white/10 pt-8 max-w-2xl">
             <p>
-              This historical data visualization represents the recorded outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN}</strong> over the past 12 months. 
+              This historical data visualization represents the recorded <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN}</strong> over the past 12 months. 
               The 3D skyline map highlights severe spikes and seasonal trends corresponding to mosquito breeding seasons.
             </p>
           </div>
