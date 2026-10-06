@@ -327,6 +327,11 @@ export default function OutbreakGlobe() {
     const handleInteraction = (e: Event) => {
       // Ignore clicks on the Autopilot toggle button itself
       if ((e.target as HTMLElement).closest('#auto-tour-btn')) return;
+      
+      // If we are interrupting, cancel any mid-air autopilot flight immediately
+      // Do this here instead of in the effect to prevent race conditions with manual country clicks!
+      cancelFlight();
+      
       setAutoTourEnabled(false);
     };
 
@@ -341,12 +346,9 @@ export default function OutbreakGlobe() {
   useEffect(() => {
     if (!autoTourEnabled || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
-      // When user interrupts tour, reset rotation and cancel flights
-      if (!autoTourEnabled) {
-        cancelFlight(); // Immediately stop the airplane if it was mid-flight during autopilot
-        if (globeEl.current && !activeCountry) {
-          globeEl.current.controls().autoRotate = true;
-        }
+      // When user interrupts tour, reset rotation (unless they are interacting with a country)
+      if (!autoTourEnabled && globeEl.current && !activeCountry) {
+        globeEl.current.controls().autoRotate = true;
       }
       return;
     }
@@ -408,8 +410,8 @@ export default function OutbreakGlobe() {
     handleResize();
     window.addEventListener("resize", handleResize);
     
-    // Fetch topology only once
-    fetch("https://raw.githubusercontent.com/vasturiano/react-globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson")
+    // Fetch topology only once from local assets for blazing fast speed
+    fetch("/assets/countries.geojson")
       .then(res => res.json())
       .then(data => {
         // Fix: Remove internal holes (lakes/ice sheets) from GeoJSON to prevent "white/black block" artifacts
@@ -524,8 +526,8 @@ export default function OutbreakGlobe() {
           width={windowWidth}
           height={windowHeight}
           backgroundColor="rgba(0,0,0,0)"
-          globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
-          backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+          globeImageUrl="/assets/earth-blue-marble.jpg"
+          backgroundImageUrl="/assets/night-sky.png"
           
           // Polygons (Red, Orange, Yellow)
           polygonsTransitionDuration={0}

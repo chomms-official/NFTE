@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mozziemap-cache-v3';
+const CACHE_NAME = 'mozziemap-cache-v4';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -6,7 +6,10 @@ const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
-  '/apple-touch-icon.png'
+  '/apple-touch-icon.png',
+  '/assets/countries.geojson',
+  '/assets/earth-blue-marble.jpg',
+  '/assets/night-sky.png'
 ];
 
 self.addEventListener('install', (event) => {
