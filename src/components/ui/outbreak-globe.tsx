@@ -527,7 +527,7 @@ export default function OutbreakGlobe() {
     if (!activeCountry) return [];
     const countryName = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
     const seed = countryName.length * 10 + (activeMosquito.length * 5);
-    const risk = activeCountry.properties.risk;
+    const risk = MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.ADMIN] || MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.NAME] || 0;
     const raw = generateContributions(Date.now(), seed, 365);
     
     // Fix: Accurate and realistic data scaling based on population!
@@ -545,6 +545,13 @@ export default function OutbreakGlobe() {
       date: d.date,
       count: d.count === 0 ? 0 : Math.floor(d.count * riskMultiplier * (0.8 + Math.random() * 0.4))
     }));
+  }, [activeCountry, activeMosquito]);
+
+  // Calculate live risk for the active country based on the selected mosquito
+  const activeCountryLiveRisk = useMemo(() => {
+    if (!activeCountry) return 0;
+    const name = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
+    return MOSQUITO_DATA[activeMosquito].riskMap[name] || 0;
   }, [activeCountry, activeMosquito]);
 
   if (!mounted) return null;
@@ -633,7 +640,7 @@ export default function OutbreakGlobe() {
       {/* TOP CONTROLS: Mosquito Selectors */}
       <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
         activeCountry 
-          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto" 
+          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-100" 
           : "left-1/2 transform -translate-x-1/2 opacity-100"
       }`}>
         {(Object.entries(MOSQUITO_DATA) as [MosquitoType, any][]).map(([key, data]) => {
@@ -670,7 +677,7 @@ export default function OutbreakGlobe() {
       {/* Autopilot Toggle */}
       <div className={`absolute top-20 sm:top-28 z-[60] transition-all duration-500 ${
         activeCountry 
-          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto" 
+          ? "md:left-6 md:transform-none left-1/2 transform -translate-x-1/2 opacity-100" 
           : "left-1/2 transform -translate-x-1/2 opacity-100"
       }`}>
         <button
@@ -752,7 +759,7 @@ export default function OutbreakGlobe() {
         <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
           
           {/* Fixed Header with Close Button */}
-          <div className="flex justify-end p-4 pt-6 md:p-8 shrink-0">
+          <div className="flex justify-end p-4 pt-36 md:p-8 shrink-0">
             <button 
               onClick={() => {
                 setActiveCountry(null);
@@ -772,7 +779,7 @@ export default function OutbreakGlobe() {
             <div className="flex items-center gap-4 mb-4 mt-2 sm:mt-0">
               {(() => {
                 const Icon = MOSQUITO_DATA[activeMosquito].icon as any;
-                return <Icon className="w-10 h-10 shrink-0" style={{ color: getRiskColor(activeCountry.properties.risk) }} />;
+                return <Icon className="w-10 h-10 shrink-0" style={{ color: getRiskColor(activeCountryLiveRisk) }} />;
               })()}
               <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
                 {activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}
@@ -783,12 +790,12 @@ export default function OutbreakGlobe() {
             <span 
               className="px-3 py-1.5 sm:px-4 sm:py-2 border rounded-full text-[10px] sm:text-sm font-black uppercase tracking-widest whitespace-nowrap"
               style={{ 
-                borderColor: getRiskColorRGBA(activeCountry.properties.risk, 0.5), 
-                color: getRiskColor(activeCountry.properties.risk),
-                backgroundColor: getRiskColorRGBA(activeCountry.properties.risk, 0.1)
+                borderColor: getRiskColorRGBA(activeCountryLiveRisk, 0.5), 
+                color: getRiskColor(activeCountryLiveRisk),
+                backgroundColor: getRiskColorRGBA(activeCountryLiveRisk, 0.1)
               }}
             >
-              Risk Level: {activeCountry.properties.risk.toFixed(1)} / 10
+              Risk Level: {activeCountryLiveRisk.toFixed(1)} / 10
             </span>
             <span className="text-zinc-400 text-[10px] sm:text-sm font-medium tracking-wide bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/5 whitespace-nowrap">
               Population: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
@@ -796,19 +803,19 @@ export default function OutbreakGlobe() {
           </div>
 
           <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden transform-gpu">
-            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></div>
+            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></div>
             
             <ContributionSkyline 
               data={countryData}
-              palette={activeCountry.properties.risk >= 7.5 ? "danger" : activeCountry.properties.risk >= 4.5 ? "ember" : "halloween"}
+              palette={activeCountryLiveRisk >= 7.5 ? "danger" : activeCountryLiveRisk >= 4.5 ? "ember" : "halloween"}
               unit="case"
               unitPlural="cases"
               defaultView="3d"
               orbit={false}
               title={
                 <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></span>
-                  <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountry.properties.risk) }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></span>
                   <span className="font-bold text-white tracking-widest uppercase text-xs">
                     {MOSQUITO_DATA[activeMosquito].name} Outbreak History
                   </span>
