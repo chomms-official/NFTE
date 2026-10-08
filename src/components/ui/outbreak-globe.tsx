@@ -511,11 +511,12 @@ export default function OutbreakGlobe() {
     if (!globeContainer) return;
 
     // Use touchstart, pointerdown, mousedown for 100% cross-device compatibility
+    // IMPORTANT: We use capture: true so we intercept the event BEFORE Three.js OrbitControls swallows it!
     const events = ['touchstart', 'pointerdown', 'mousedown', 'wheel'];
-    events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true }));
+    events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true, capture: true }));
     return () => {
       clearTimeout(interactionTimeout);
-      events.forEach(e => globeContainer.removeEventListener(e, handleInteraction));
+      events.forEach(e => globeContainer.removeEventListener(e, handleInteraction, { capture: true } as any));
     };
   }, [autoTourEnabled]);
 
