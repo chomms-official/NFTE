@@ -956,7 +956,7 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-[600px] xl:max-w-[850px] bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
+        <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-2xl xl:max-w-4xl bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
           
           {/* Fixed Header with Close Button */}
           <div className="flex justify-end p-4 pt-36 md:p-8 shrink-0">

@@ -27,7 +27,7 @@
   }
   @media (min-width: 1024px) {
     html {
-      zoom: 0.75;
+      font-size: 12px;
     }
   }
   img {
