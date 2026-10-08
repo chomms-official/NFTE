@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mozziemap-cache-v4';
+const CACHE_NAME = 'mozziemap-cache-v5';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -7,6 +7,7 @@ const ASSETS_TO_CACHE = [
   '/icon-192x192.png',
   '/icon-512x512.png',
   '/apple-touch-icon.png',
+  '/og-image.png',
   '/assets/countries.geojson',
   '/assets/earth-blue-marble.jpg',
   '/assets/night-sky.png'

@@ -1,11 +1,11 @@
 {
-  "name": "Chomm's House",
-  "short_name": "Chomm's House",
-  "description": "Natural Protection - Mosquito Repellent Film",
-  "start_url": "/",
+  "name": "MozzieMap",
+  "short_name": "MozzieMap",
+  "description": "Global Mosquito Outbreak Simulator",
+  "start_url": "/simulator",
   "display": "standalone",
-  "background_color": "#181916",
-  "theme_color": "#181916",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
   "icons": [
     {
       "src": "/icon-192x192.png",
