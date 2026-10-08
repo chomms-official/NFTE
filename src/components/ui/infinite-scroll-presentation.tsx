@@ -30,10 +30,11 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
 
   const sectionRef = useRef<HTMLDivElement | null>(null);
 
-  const lastInteractionTime = useRef<number>(Date.now());
-  const requestRef = useRef<number>();
+  const lastInteractionTime = useRef<number>(0);
+  const requestRef = useRef<number>(0);
 
   useEffect(() => {
+    lastInteractionTime.current = Date.now();
     const handleWheel = (e: globalThis.WheelEvent) => {
       e.preventDefault();
       lastInteractionTime.current = Date.now();
