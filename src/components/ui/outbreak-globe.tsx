@@ -525,7 +525,7 @@ export default function OutbreakGlobe() {
     return () => {
       events.forEach(e => globeContainer.removeEventListener(e, handleInteraction, { capture: true } as any));
     };
-  }, [autoTourEnabled]);
+  }, [autoTourEnabled, mounted]);
 
   // 2. Handle Tour Loop
   useEffect(() => {
@@ -588,6 +588,8 @@ export default function OutbreakGlobe() {
   // Responsive setup
   useEffect(() => {
     setMounted(true);
+    document.documentElement.classList.add("simulator-page");
+    
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
       setWindowHeight(window.innerHeight);
@@ -613,6 +615,7 @@ export default function OutbreakGlobe() {
       
     return () => {
       window.removeEventListener("resize", handleResize);
+      document.documentElement.classList.remove("simulator-page");
       cancelFlight();
       if (airplaneMeshRef.current) {
         airplaneMeshRef.current.traverse((child) => {

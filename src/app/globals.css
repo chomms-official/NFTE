@@ -26,7 +26,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   @media (min-width: 1024px) {
-    html {
+    html.simulator-page {
       font-size: 12px;
     }
   }
