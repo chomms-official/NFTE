@@ -25,6 +25,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  @media (min-width: 1024px) {
+    html {
+      zoom: 0.75;
+    }
+  }
   img {
     display: block;
   }

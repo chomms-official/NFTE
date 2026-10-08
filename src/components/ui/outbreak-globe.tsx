@@ -727,13 +727,31 @@ export default function OutbreakGlobe() {
     const name = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
     const explicitRisk = MOSQUITO_DATA[activeMosquito].riskMap[name];
     if (explicitRisk !== undefined) return explicitRisk;
-    // Fallback: estimate risk from latitude (tropical regions = higher mosquito risk)
+    
+    // Fallback: estimate risk from latitude, tailored per mosquito type
     const coords = activeCountry.properties;
     const lat = Math.abs(coords.LABEL_Y || coords.LAT || 0);
-    if (lat < 15) return 4.5;    // Deep tropics
-    if (lat < 30) return 3.0;    // Subtropics
-    if (lat < 45) return 1.5;    // Temperate
-    return 0.5;                  // High latitudes
+    
+    let baseRisk = 0.5;
+    if (lat < 15) baseRisk = 4.5;       // Deep tropics
+    else if (lat < 30) baseRisk = 3.0;  // Subtropics
+    else if (lat < 45) baseRisk = 1.5;  // Temperate
+
+    // Apply specific mosquito survival penalties for cold regions (high latitude)
+    if (activeMosquito === 'aedes') {
+      if (lat >= 45) return 0.2; // Aedes can't survive harsh winters
+      return baseRisk + 0.3;
+    }
+    if (activeMosquito === 'anopheles') {
+      if (lat >= 45) return 0.1; // Eradicated in most cold countries
+      return baseRisk;
+    }
+    if (activeMosquito === 'culex') {
+      if (lat >= 45) return 1.8; // Culex (West Nile) actually thrives in temperate summers
+      return baseRisk + 0.1;
+    }
+    
+    return baseRisk;
   }, [activeCountry, activeMosquito]);
 
   if (!mounted) return null;
@@ -820,7 +838,7 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* TOP CONTROLS: Mosquito Selectors */}
-      <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[60] w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
+      <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[999] pointer-events-auto w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
         activeCountry 
           ? "md:left-6 md:translate-x-0 left-1/2 -translate-x-1/2 opacity-100" 
           : "left-1/2 -translate-x-1/2 opacity-100"
@@ -857,7 +875,7 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* Autopilot Toggle */}
-      <div className={`absolute top-20 sm:top-28 z-[60] transition-all duration-500 ${
+      <div className={`absolute top-20 sm:top-28 z-[999] pointer-events-auto transition-all duration-500 ${
         activeCountry 
           ? "md:left-6 md:translate-x-0 left-1/2 -translate-x-1/2 opacity-100" 
           : "left-1/2 -translate-x-1/2 opacity-100"
