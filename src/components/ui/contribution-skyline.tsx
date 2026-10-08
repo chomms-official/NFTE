@@ -384,25 +384,25 @@ function Stat({
   unit: string
   sub: string
   accent: string
-  size: number
+  size: string | number
   align: "start" | "end" | "stack"
 }) {
   if (align === "stack") {
     return (
       <div className="min-w-0">
-        <div className="text-[13px] leading-tight" style={{ color: MUTED }}>
+        <div className="text-sm leading-tight" style={{ color: MUTED }}>
           {label}
         </div>
-        <div className="mt-1 flex items-baseline gap-1.5">
+        <div className="mt-1 flex items-baseline gap-1.5 truncate">
           <span
             className="font-semibold tabular-nums transition-colors duration-500 motion-reduce:transition-none"
             style={{ color: accent, fontSize: size, lineHeight: 1, letterSpacing: "-0.02em" }}
           >
             {value}
           </span>
-          <span className="text-[14px]">{unit}</span>
+          <span className="text-sm shrink-0">{unit}</span>
         </div>
-        <div className="mt-0.5 text-[12px] whitespace-normal" style={{ color: MUTED }}>
+        <div className="mt-0.5 text-xs whitespace-normal" style={{ color: MUTED }}>
           {sub}
         </div>
       </div>
@@ -412,13 +412,13 @@ function Stat({
     <div className="grid grid-cols-[auto_auto] items-end gap-x-2" style={{ justifyContent: align }}>
       {align === "end" ? (
         <>
-          <div className="text-right text-[13px] leading-tight" style={{ color: MUTED }}>
+          <div className="text-right text-sm leading-tight" style={{ color: MUTED }}>
             {label}
           </div>
           <div />
         </>
       ) : (
-        <div className="col-span-2 text-[13px] leading-tight" style={{ color: MUTED }}>
+        <div className="col-span-2 text-sm leading-tight" style={{ color: MUTED }}>
           {label}
         </div>
       )}
@@ -429,8 +429,8 @@ function Stat({
         {value}
       </div>
       <div className="pb-[0.15em] leading-tight">
-        <div className="text-[15px]">{unit}</div>
-        <div className="whitespace-nowrap text-[13px]" style={{ color: MUTED }}>
+        <div className="text-base">{unit}</div>
+        <div className="whitespace-nowrap text-sm" style={{ color: MUTED }}>
           {sub}
         </div>
       </div>
@@ -1187,7 +1187,7 @@ export default function ContributionSkyline({
       }}
     >
       <header className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h3 className="m-0 text-[15px] font-normal leading-snug">
+        <h3 className="m-0 text-base font-normal leading-snug">
           {title ?? (
             <>
               <span className="font-semibold tabular-nums">{nf.format(stats.total)}</span> {noun(stats.total)} in the last year
@@ -1288,7 +1288,7 @@ export default function ContributionSkyline({
             ref={tipRef}
             role="tooltip"
             aria-hidden={active < 0}
-            className="pointer-events-none absolute top-3 left-3 z-20 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12px] leading-none shadow-lg transition-opacity duration-150 sm:top-4 sm:left-4 motion-reduce:transition-none"
+            className="pointer-events-none absolute top-3 left-3 z-20 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs leading-none shadow-lg transition-opacity duration-150 sm:top-4 sm:left-4 motion-reduce:transition-none"
             style={{
               opacity: active >= 0 ? 1 : 0,
               background: "var(--color-foreground, #171717)",
@@ -1333,14 +1333,14 @@ export default function ContributionSkyline({
             <div className="min-h-0 overflow-hidden">
               <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-2 pt-4 pb-1 sm:gap-x-4 sm:px-4 md:grid-cols-4">
                 {statBlocks.map((b) => (
-                  <Stat key={b.label} {...b} accent={theme.accent} size={width < 450 ? 20 : 28} align="stack" />
+                  <Stat key={b.label} {...b} accent={theme.accent} size={width < 450 ? "1.25rem" : "1.75rem"} align="stack" />
                 ))}
               </div>
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 pt-3 pb-3 text-[12px] sm:px-4" style={{ color: MUTED }}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 pt-3 pb-3 text-xs sm:px-4" style={{ color: MUTED }}>
           {footer === undefined ? (
             <span className="relative grid flex-1">
               {hints.map((h) => (
