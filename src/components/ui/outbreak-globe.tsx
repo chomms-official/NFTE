@@ -501,31 +501,18 @@ export default function OutbreakGlobe() {
 
   // --- TOUR MODE (ATTRACT MODE) ---
   const [autoTourEnabled, setAutoTourEnabled] = useState(true);
+  const autoTourEnabledRef = useRef(autoTourEnabled);
+  useEffect(() => {
+    autoTourEnabledRef.current = autoTourEnabled;
+  }, [autoTourEnabled]);
+
   const tourIntervalRef = useRef<any>(null);
   const tourMosquitoOrder: MosquitoType[] = ["aedes", "anopheles", "culex"];
   const tourMosquitoIndexRef = useRef(0);
   const tourCountryIndexRef = useRef(0);
   const tourCountriesRef = useRef<any[]>([]);
 
-  // 1. Detect User Interaction to turn off tour (Only on the globe itself!)
-  useEffect(() => {
-    const handleInteraction = () => {
-      if (!autoTourEnabled) return;
-      cancelFlight();
-      setAutoTourEnabled(false);
-    };
 
-    const globeContainer = document.getElementById('globe-container');
-    if (!globeContainer) return;
-
-    // Use touchstart, pointerdown, mousedown for 100% cross-device compatibility
-    // IMPORTANT: We use capture: true so we intercept the event BEFORE Three.js OrbitControls swallows it!
-    const events = ['touchstart', 'pointerdown', 'mousedown', 'wheel'];
-    events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true, capture: true }));
-    return () => {
-      events.forEach(e => globeContainer.removeEventListener(e, handleInteraction, { capture: true } as any));
-    };
-  }, [autoTourEnabled, mounted]);
 
   // 2. Handle Tour Loop
   useEffect(() => {
@@ -737,6 +724,16 @@ export default function OutbreakGlobe() {
       controls.autoRotateSpeed = 0.15; 
       controls.enableZoom = true;
       
+      const handleControlStart = () => {
+        if (autoTourEnabledRef.current) {
+          cancelFlight();
+          setAutoTourEnabled(false);
+        }
+      };
+      
+      // 100% reliable detection of user manipulating the 3D globe (pan, zoom, rotate)
+      controls.addEventListener('start', handleControlStart);
+      
       // If no active country, look at the first hotspot of the active mosquito
       if (!activeCountry && MOSQUITO_DATA[activeMosquito].hotspots.length > 0) {
         const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
@@ -744,6 +741,10 @@ export default function OutbreakGlobe() {
         globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, ms);
         isInitialView.current = false;
       }
+      
+      return () => {
+        controls.removeEventListener('start', handleControlStart);
+      };
     }
   }, [mounted, activeMosquito, globeEl.current]);
 
