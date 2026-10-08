@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-react";
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
@@ -345,11 +345,22 @@ export default function OutbreakGlobe() {
       setAutoTourEnabled(false);
     }
     
-    // Calculate destination
-    let pt = countryFeature.geometry?.coordinates;
-    while (pt && Array.isArray(pt[0])) pt = pt[0];
-    const destLng = pt ? pt[0] : 0;
-    const destLat = pt ? pt[1] : 0;
+    // Accurately calculate destination using country centroids (LABEL_X, LABEL_Y) for high precision
+    let destLng = 0;
+    let destLat = 0;
+    if (countryFeature.properties?.LABEL_X !== undefined && countryFeature.properties?.LABEL_Y !== undefined) {
+      destLng = Number(countryFeature.properties.LABEL_X);
+      destLat = Number(countryFeature.properties.LABEL_Y);
+    } else if (countryFeature.properties?.LON !== undefined && countryFeature.properties?.LAT !== undefined) {
+      destLng = Number(countryFeature.properties.LON);
+      destLat = Number(countryFeature.properties.LAT);
+    } else {
+      // Absolute fallback: use the first vertex (inaccurate for large countries)
+      let pt = countryFeature.geometry?.coordinates;
+      while (pt && Array.isArray(pt[0])) pt = pt[0];
+      destLng = pt ? pt[0] : 0;
+      destLat = pt ? pt[1] : 0;
+    }
     
     // Get current view for flight start
     let startLat = 0;
@@ -364,9 +375,12 @@ export default function OutbreakGlobe() {
       startLng = pov.lng;
     }
 
-    // STRICTLY FLY EASTWARD! (Globe rotates East, so we fly WITH the rotation)
+    // Calculate shortest path for animation to make flights look realistic and fluid
     let endLng = destLng;
-    if (endLng <= startLng) {
+    const lngDiffRaw = endLng - startLng;
+    if (lngDiffRaw > 180) {
+      endLng -= 360;
+    } else if (lngDiffRaw < -180) {
       endLng += 360;
     }
     
@@ -381,8 +395,8 @@ export default function OutbreakGlobe() {
       const offsetLat = window.innerWidth <= 768 ? -20 : 0; // Shift camera South so country moves North (Up) out of the modal!
       
       // Calculate flight duration dynamically so it doesn't look too fast if going around the whole globe
-      const lngDiff = endLng - startLng;
-      const flightDuration = Math.max(3000, (lngDiff / 360) * 5000); 
+      const lngDiff = Math.abs(endLng - startLng);
+      const flightDuration = Math.max(3000, (lngDiff / 180) * 4000); 
       
       globeEl.current.pointOfView({ lat: endLat + offsetLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
       
@@ -671,6 +685,54 @@ export default function OutbreakGlobe() {
     }));
   }, [activeMosquito]);
 
+  // Memoize all Globe callbacks to prevent WebGL re-evaluation and severe stuttering on every render!
+  const getPolygonColor = useCallback((d: any) => {
+    const countryName = activeCountry ? (activeCountry.properties.ADMIN || activeCountry.properties.NAME) : "";
+    const dName = d.properties.ADMIN || d.properties.NAME;
+    if (activeCountry && dName === countryName) return "#ffffff"; 
+    return getRiskColor(d.properties.risk);
+  }, [activeCountry]);
+
+  const handlePolygonHover = useCallback((d: any) => {
+    if (globeEl.current && !activeCountry) {
+      globeEl.current.controls().autoRotate = !d;
+    }
+  }, [activeCountry]);
+
+  const getPolygonLabel = useCallback((d: any) => `
+    <div style="background: rgba(10,10,10,0.95); border: 1px solid #3f3f46; border-radius: 12px; padding: 12px; font-family: sans-serif; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN || d.properties.NAME || "Unknown"}</div>
+      <div style="color: ${getRiskColor(d.properties.risk)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
+        ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
+      </div>
+      <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view historical outbreak data</div>
+    </div>
+  `, [activeMosquito]);
+
+  const createHtmlElement = useCallback((d: any) => {
+    const el = document.createElement('div');
+    el.className = "pointer-events-none transform -translate-x-1/2 -translate-y-full";
+    el.innerHTML = `
+      <div class="relative flex flex-col items-center justify-end group">
+        <!-- Floating Info Box -->
+        <div class="absolute bottom-12 bg-black/90 text-red-100 text-[10px] font-black px-3 py-1.5 rounded-lg border border-red-500/50 backdrop-blur-md whitespace-nowrap uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+          ${d.city}
+          <span class="block text-red-500/90 text-[8px] mt-0.5">CRITICAL LEVEL: ${d.weight.toFixed(1)}</span>
+        </div>
+        <!-- Laser Beam / Extruded Line -->
+        <div class="w-[2px] h-12 bg-gradient-to-t from-red-600 via-red-500 to-transparent absolute bottom-2 shadow-[0_0_10px_rgba(220,38,38,0.8)]"></div>
+        <!-- Glowing Base Dot -->
+        <div class="relative z-10 w-3 h-3 bg-white rounded-full shadow-[0_0_15px_5px_rgba(220,38,38,0.9)] border-2 border-red-600"></div>
+        <!-- Intense Pulse Effect -->
+        <div class="absolute bottom-[-6px] w-6 h-6 bg-red-600/50 rounded-full animate-ping"></div>
+      </div>
+    `;
+    return el;
+  }, []);
+
+  const getPolygonStrokeColor = useCallback(() => "#111111", []);
+
+
   // Setup globe controls on mount/change
   useEffect(() => {
     if (globeEl.current && mounted) {
@@ -773,34 +835,12 @@ export default function OutbreakGlobe() {
           polygonsTransitionDuration={0}
           polygonsData={countries}
           polygonAltitude={0.005}
-          polygonCapColor={(d: any) => {
-            const countryName = activeCountry ? (activeCountry.properties.ADMIN || activeCountry.properties.NAME) : "";
-            const dName = d.properties.ADMIN || d.properties.NAME;
-            if (activeCountry && dName === countryName) return "#ffffff"; 
-            return getRiskColor(d.properties.risk);
-          }}
-          polygonSideColor={(d: any) => {
-            const countryName = activeCountry ? (activeCountry.properties.ADMIN || activeCountry.properties.NAME) : "";
-            const dName = d.properties.ADMIN || d.properties.NAME;
-            if (activeCountry && dName === countryName) return "#ffffff"; 
-            return getRiskColor(d.properties.risk);
-          }}
-          polygonStrokeColor={() => "#111111"}
+          polygonCapColor={getPolygonColor}
+          polygonSideColor={getPolygonColor}
+          polygonStrokeColor={getPolygonStrokeColor}
           onPolygonClick={(d: any) => handleSelectCountry(d, true)}
-          onPolygonHover={(d) => {
-            if (globeEl.current && !activeCountry) {
-              globeEl.current.controls().autoRotate = !d;
-            }
-          }}
-          polygonLabel={(d: any) => `
-            <div style="background: rgba(10,10,10,0.95); border: 1px solid #3f3f46; border-radius: 12px; padding: 12px; font-family: sans-serif; pointer-events: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-              <div style="color: white; font-size: 16px; margin-bottom: 6px; font-weight: bold;">${d.properties.ADMIN || d.properties.NAME || "Unknown"}</div>
-              <div style="color: ${getRiskColor(d.properties.risk)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
-                ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
-              </div>
-              <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view historical outbreak data</div>
-            </div>
-          `}
+          onPolygonHover={handlePolygonHover}
+          polygonLabel={getPolygonLabel}
 
           // Active Pulsing Hotspots (Surface Ripples)
           ringsData={ringData}
@@ -812,29 +852,7 @@ export default function OutbreakGlobe() {
           
           // Beautiful Glowing 3D-like HUD Markers
           htmlElementsData={ringData}
-          htmlElement={(d: any) => {
-            const el = document.createElement('div');
-            el.className = "pointer-events-none transform -translate-x-1/2 -translate-y-full";
-            el.innerHTML = `
-              <div class="relative flex flex-col items-center justify-end group">
-                <!-- Floating Info Box -->
-                <div class="absolute bottom-12 bg-black/90 text-red-100 text-[10px] font-black px-3 py-1.5 rounded-lg border border-red-500/50 backdrop-blur-md whitespace-nowrap uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(220,38,38,0.4)]">
-                  ${d.city}
-                  <span class="block text-red-500/90 text-[8px] mt-0.5">CRITICAL LEVEL: ${d.weight.toFixed(1)}</span>
-                </div>
-                
-                <!-- Laser Beam / Extruded Line -->
-                <div class="w-[2px] h-12 bg-gradient-to-t from-red-600 via-red-500 to-transparent absolute bottom-2 shadow-[0_0_10px_rgba(220,38,38,0.8)]"></div>
-                
-                <!-- Glowing Base Dot -->
-                <div class="relative z-10 w-3 h-3 bg-white rounded-full shadow-[0_0_15px_5px_rgba(220,38,38,0.9)] border-2 border-red-600"></div>
-                
-                <!-- Intense Pulse Effect -->
-                <div class="absolute bottom-[-6px] w-6 h-6 bg-red-600/50 rounded-full animate-ping"></div>
-              </div>
-            `;
-            return el;
-          }}
+          htmlElement={createHtmlElement}
         />
       </div>
 
