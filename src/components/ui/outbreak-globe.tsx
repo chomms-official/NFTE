@@ -509,16 +509,10 @@ export default function OutbreakGlobe() {
 
   // 1. Detect User Interaction to turn off tour (Only on the globe itself!)
   useEffect(() => {
-    let interactionTimeout: NodeJS.Timeout;
     const handleInteraction = () => {
       if (!autoTourEnabled) return;
-      
-      // Delay the interruption slightly so it doesn't swallow native click/tap events on mobile
-      clearTimeout(interactionTimeout);
-      interactionTimeout = setTimeout(() => {
-        cancelFlight();
-        setAutoTourEnabled(false);
-      }, 150);
+      cancelFlight();
+      setAutoTourEnabled(false);
     };
 
     const globeContainer = document.getElementById('globe-container');
@@ -529,7 +523,6 @@ export default function OutbreakGlobe() {
     const events = ['touchstart', 'pointerdown', 'mousedown', 'wheel'];
     events.forEach(e => globeContainer.addEventListener(e, handleInteraction, { passive: true, capture: true }));
     return () => {
-      clearTimeout(interactionTimeout);
       events.forEach(e => globeContainer.removeEventListener(e, handleInteraction, { capture: true } as any));
     };
   }, [autoTourEnabled]);
