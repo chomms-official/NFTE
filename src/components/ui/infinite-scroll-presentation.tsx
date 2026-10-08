@@ -30,39 +30,39 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
 
   const sectionRef = useRef<HTMLDivElement | null>(null);
 
+  const lastInteractionTime = useRef<number>(Date.now());
+  const requestRef = useRef<number>();
+
   useEffect(() => {
     const handleWheel = (e: globalThis.WheelEvent) => {
       e.preventDefault();
+      lastInteractionTime.current = Date.now();
       
-      // Reduce sensitivity slightly for smoother reading
       const scrollDelta = e.deltaY * 0.0007;
       
       setScrollProgress((prev) => {
         let newProgress = prev + scrollDelta;
-        
-        // If scrolling down past the reading phase (progress > 1.8), go to next step
         if (newProgress > 1.8) {
           setCurrentStepIndex((idx) => (idx + 1) % steps.length);
-          return 0; // Reset progress for the next image
+          return 0;
         }
-        
-        // If scrolling up past the beginning (progress < 0), go to previous step
         if (newProgress < 0) {
           setCurrentStepIndex((idx) => (idx - 1 + steps.length) % steps.length);
-          return 1.8; // Set to the end of the previous image
+          return 1.8;
         }
-        
         return newProgress;
       });
     };
 
     const handleTouchStart = (e: globalThis.TouchEvent) => {
+      lastInteractionTime.current = Date.now();
       setTouchStartY(e.touches[0].clientY);
     };
 
     const handleTouchMove = (e: globalThis.TouchEvent) => {
       if (!touchStartY) return;
       e.preventDefault();
+      lastInteractionTime.current = Date.now();
 
       const touchY = e.touches[0].clientY;
       const deltaY = touchStartY - touchY;
@@ -90,6 +90,7 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
     };
 
     const handleTouchEnd = (): void => {
+      lastInteractionTime.current = Date.now();
       setTouchStartY(0);
     };
 
@@ -105,6 +106,32 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
       window.removeEventListener("touchend", handleTouchEnd as EventListener);
     };
   }, [steps.length, touchStartY]);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    const autoScroll = () => {
+      const now = Date.now();
+      // If no interaction for 5 seconds (5000ms)
+      if (now - lastInteractionTime.current > 5000) {
+        setScrollProgress((prev) => {
+          let newProgress = prev + 0.002; // Adjust this value for auto-scroll speed
+          
+          if (newProgress > 1.8) {
+            setCurrentStepIndex((idx) => (idx + 1) % steps.length);
+            return 0;
+          }
+          return newProgress;
+        });
+      }
+      requestRef.current = requestAnimationFrame(autoScroll);
+    };
+
+    requestRef.current = requestAnimationFrame(autoScroll);
+
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [steps.length]);
 
   useEffect(() => {
     const checkIfMobile = (): void => {
@@ -228,13 +255,13 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
                 className="flex items-center justify-center text-center gap-4 w-full relative z-10 transition-none flex-col mix-blend-normal"
               >
                 <motion.h2
-                  className="text-4xl md:text-5xl lg:text-7xl font-bold text-white transition-none drop-shadow-lg"
+                  className="text-5xl md:text-6xl lg:text-8xl font-sans font-extrabold tracking-tighter text-white transition-none drop-shadow-lg"
                   style={{ transform: `translateX(-${textTranslateX}vw)` }}
                 >
                   {firstWord}
                 </motion.h2>
                 <motion.h2
-                  className="text-4xl md:text-5xl lg:text-7xl font-bold text-center text-white transition-none drop-shadow-lg"
+                  className="text-5xl md:text-6xl lg:text-8xl font-sans font-extrabold tracking-tighter text-center text-white transition-none drop-shadow-lg"
                   style={{ transform: `translateX(${textTranslateX}vw)` }}
                 >
                   {restOfTitle}

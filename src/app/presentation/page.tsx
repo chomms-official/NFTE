@@ -32,8 +32,8 @@ const presentationSteps: PresentationStep[] = [
     overview: "Just dissolve 1 film in water and pour it into your favorite spray bottle.",
   },
   {
-    src: "/asset_spray_clean.jpg",
-    bg: "/asset_spray_clean.jpg",
+    src: "/asset_spray.jpg",
+    bg: "/asset_spray.jpg",
     title: "Ready to Use",
     date: "Step 05",
     overview: "Your natural mosquito repellent spray is fully prepared and ready to use!",

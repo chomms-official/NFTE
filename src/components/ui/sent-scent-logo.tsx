@@ -1,9 +1,9 @@
 export const SentScentLogo = ({ className = "" }: { className?: string }) => (
   <svg
-    viewBox="0 0 200 60"
+    viewBox="0 0 250 60"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`w-auto h-12 ${className}`}
+    className={`w-auto h-8 md:h-12 ${className}`}
   >
     {/* Icon: Abstract leaf / scent wave */}
     <g transform="translate(10, 10)">
