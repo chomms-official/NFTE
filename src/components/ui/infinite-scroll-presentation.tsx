@@ -4,11 +4,11 @@ import {
   useEffect,
   useRef,
   useState,
-  ReactNode,
 } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { SentScentLogo } from "./sent-scent-logo";
+import { advancePresentation, type PresentationPosition } from "@/lib/presentation";
 
 export interface PresentationStep {
   src: string;
@@ -23,114 +23,95 @@ interface InfiniteScrollPresentationProps {
 }
 
 export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentationProps) => {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [scrollProgress, setScrollProgress] = useState<number>(0);
-  const [touchStartY, setTouchStartY] = useState<number>(0);
+  const [position, setPosition] = useState<PresentationPosition>({ index: 0, progress: 0 });
+  const { index: currentStepIndex, progress: scrollProgress } = position;
   const [isMobileState, setIsMobileState] = useState<boolean>(false);
-
   const sectionRef = useRef<HTMLDivElement | null>(null);
-
+  const touchStartY = useRef<number | null>(null);
   const lastInteractionTime = useRef<number>(0);
-  const requestRef = useRef<number>(0);
 
   useEffect(() => {
     lastInteractionTime.current = Date.now();
-    const handleWheel = (e: globalThis.WheelEvent) => {
-      e.preventDefault();
+    const move = (delta: number) => {
+      setPosition((previous) => advancePresentation(previous, delta, steps.length));
+    };
+    const handleWheel = (event: WheelEvent) => {
+      // Preserve browser zoom gestures.
+      if (event.ctrlKey || event.metaKey) return;
+      event.preventDefault();
       lastInteractionTime.current = Date.now();
-      
-      const scrollDelta = e.deltaY * 0.0007;
-      
-      setScrollProgress((prev) => {
-        let newProgress = prev + scrollDelta;
-        if (newProgress > 1.8) {
-          setCurrentStepIndex((idx) => (idx + 1) % steps.length);
-          return 0;
-        }
-        if (newProgress < 0) {
-          setCurrentStepIndex((idx) => (idx - 1 + steps.length) % steps.length);
-          return 1.8;
-        }
-        return newProgress;
-      });
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
+      move(pixels * 0.0007);
+    };
+    const handleTouchStart = (event: TouchEvent) => {
+      lastInteractionTime.current = Date.now();
+      touchStartY.current = event.touches.length === 1 ? event.touches[0].clientY : null;
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      if (touchStartY.current === null || event.touches.length !== 1) return;
+      event.preventDefault();
+      lastInteractionTime.current = Date.now();
+      const touchY = event.touches[0].clientY;
+      const deltaY = touchStartY.current - touchY;
+      move(deltaY * (deltaY < 0 ? 0.006 : 0.004));
+      touchStartY.current = touchY;
+    };
+    const handleTouchEnd = () => {
+      lastInteractionTime.current = Date.now();
+      touchStartY.current = null;
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || steps.length === 0) return;
+      if (event.target instanceof HTMLElement &&
+          (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(event.target.tagName))) return;
+      const forward = ["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key);
+      const backward = ["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key);
+      if (!forward && !backward && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      lastInteractionTime.current = Date.now();
+      setPosition((previous) => ({
+        index: event.key === "Home" ? 0 : event.key === "End" ? steps.length - 1 :
+          (previous.index + (backward || (event.key === " " && event.shiftKey) ? -1 : 1) + steps.length) % steps.length,
+        progress: 0,
+      }));
     };
 
-    const handleTouchStart = (e: globalThis.TouchEvent) => {
-      lastInteractionTime.current = Date.now();
-      setTouchStartY(e.touches[0].clientY);
-    };
-
-    const handleTouchMove = (e: globalThis.TouchEvent) => {
-      if (!touchStartY) return;
-      e.preventDefault();
-      lastInteractionTime.current = Date.now();
-
-      const touchY = e.touches[0].clientY;
-      const deltaY = touchStartY - touchY;
-
-      const scrollFactor = deltaY < 0 ? 0.006 : 0.004;
-      const scrollDelta = deltaY * scrollFactor;
-      
-      setScrollProgress((prev) => {
-        let newProgress = prev + scrollDelta;
-        
-        if (newProgress > 1.8) {
-          setCurrentStepIndex((idx) => (idx + 1) % steps.length);
-          return 0;
-        }
-        
-        if (newProgress < 0) {
-          setCurrentStepIndex((idx) => (idx - 1 + steps.length) % steps.length);
-          return 1.8;
-        }
-        
-        return newProgress;
-      });
-
-      setTouchStartY(touchY);
-    };
-
-    const handleTouchEnd = (): void => {
-      lastInteractionTime.current = Date.now();
-      setTouchStartY(0);
-    };
-
-    window.addEventListener("wheel", handleWheel as EventListener, { passive: false });
-    window.addEventListener("touchstart", handleTouchStart as EventListener, { passive: false });
-    window.addEventListener("touchmove", handleTouchMove as EventListener, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd as EventListener);
-
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchcancel", handleTouchEnd);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener("wheel", handleWheel as EventListener);
-      window.removeEventListener("touchstart", handleTouchStart as EventListener);
-      window.removeEventListener("touchmove", handleTouchMove as EventListener);
-      window.removeEventListener("touchend", handleTouchEnd as EventListener);
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [steps.length, touchStartY]);
+  }, [steps.length]);
 
-  // Auto-scroll logic
   useEffect(() => {
-    const autoScroll = () => {
-      const now = Date.now();
-      // If no interaction for 5 seconds (5000ms)
-      if (now - lastInteractionTime.current > 5000) {
-        setScrollProgress((prev) => {
-          let newProgress = prev + 0.002; // Adjust this value for auto-scroll speed
-          
-          if (newProgress > 1.8) {
-            setCurrentStepIndex((idx) => (idx + 1) % steps.length);
-            return 0;
-          }
-          return newProgress;
-        });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let requestId = 0;
+    let previousTime = 0;
+    const resetIdle = () => { lastInteractionTime.current = Date.now(); previousTime = 0; };
+    const autoScroll = (time: number) => {
+      const elapsed = previousTime === 0 ? 0 : Math.min(time - previousTime, 50);
+      previousTime = time;
+      if (!document.hidden && !reducedMotion.matches && Date.now() - lastInteractionTime.current > 5000) {
+        setPosition((previous) => advancePresentation(previous, elapsed * 0.00012, steps.length));
       }
-      requestRef.current = requestAnimationFrame(autoScroll);
+      requestId = requestAnimationFrame(autoScroll);
     };
-
-    requestRef.current = requestAnimationFrame(autoScroll);
-
+    document.addEventListener("visibilitychange", resetIdle);
+    reducedMotion.addEventListener("change", resetIdle);
+    requestId = requestAnimationFrame(autoScroll);
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      cancelAnimationFrame(requestId);
+      document.removeEventListener("visibilitychange", resetIdle);
+      reducedMotion.removeEventListener("change", resetIdle);
     };
   }, [steps.length]);
 
@@ -144,6 +125,7 @@ export const InfiniteScrollPresentation = ({ steps }: InfiniteScrollPresentation
   }, []);
 
   const currentStep = steps[currentStepIndex];
+  if (!currentStep) return null;
   
   // Phase 1: 0 to 1 (Expansion)
   // Phase 2: 1 to 1.8 (Reading content)

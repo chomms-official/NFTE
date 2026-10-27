@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const url = request.nextUrl;
   const hostname = request.headers.get('host') || '';
 
@@ -10,9 +10,9 @@ export function middleware(request: NextRequest) {
   if (hostname.toLowerCase().includes('sentscent')) {
     // And they are visiting the root path '/'
     if (url.pathname === '/') {
-      // Rewrite the URL to serve the /presentation page seamlessly
+      // Rewrite the URL to serve the /sent-scent page seamlessly
       // (The URL in the browser remains the same, but serves the presentation content)
-      return NextResponse.rewrite(new URL('/presentation', request.url));
+      return NextResponse.rewrite(new URL('/sent-scent', request.url));
     }
   }
 

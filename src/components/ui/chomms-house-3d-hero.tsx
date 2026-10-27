@@ -3,8 +3,10 @@
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Outlines, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SoftShadows, SpotLight } from "@react-three/drei";
+import { Outlines, PerspectiveCamera, ContactShadows, Float, Sparkles, RoundedBox, SpotLight } from "@react-three/drei";
 import * as THREE from "three";
+import Image from "next/image";
+import { WebGLBoundary } from "./webgl-boundary";
 
 export type FrameSequenceStep = {
   from: number; to: number; color: string; num: string; total: string;
@@ -222,7 +224,8 @@ function WaterStream({ progress, toonGradient }: { progress: number, toonGradien
   return (
     <mesh ref={ref} visible={false}>
       <cylinderGeometry args={[1, 1, 1, 16]} />
-      <meshToonMaterial gradientMap={toonGradient} color="#72b2f2" opacity={0.6} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+      <meshToonMaterial gradientMap={toonGradient} color="#72b2f2" transparent opacity={0.6} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
     </mesh>
   );
 }
@@ -238,10 +241,10 @@ function Pouch({ progress, tex, bumpTex, labelTex, toonGradient }: { progress: n
 
   useFrame(() => {
     if (!ref.current) return;
+    ref.current.scale.setScalar(1.2);
     if (progress < 0.055) {
       ref.current.position.set(0, 0, 0);
       ref.current.rotation.set(0, mapRange(progress, 0, 0.055, 0, 0.1), 0);
-      ref.current.scale.setScalar(1.2);
     } else if (progress < 0.145) {
       ref.current.position.set(0, mapRange(progress, 0.055, 0.145, 0, -1), mapRange(progress, 0.055, 0.145, 0, 1.5));
       ref.current.rotation.set(mapRange(progress, 0.055, 0.145, 0, -0.2), 0.1, 0);
@@ -251,6 +254,7 @@ function Pouch({ progress, tex, bumpTex, labelTex, toonGradient }: { progress: n
       ref.current.scale.setScalar(mapRange(progress, 0.145, 0.235, 1.2, 0.8));
     } else if (progress < 0.9) {
       ref.current.position.set(0, -10, 0);
+      ref.current.rotation.set(0, 0, 0);
     } else {
       ref.current.position.set(-1.2, 0.2, -0.5);
       ref.current.rotation.set(0, 0.3, 0);
@@ -267,6 +271,7 @@ function Pouch({ progress, tex, bumpTex, labelTex, toonGradient }: { progress: n
         topSealRef.current.rotation.set(tear * 2, tear * 1.5, -tear * 0.8);
       } else {
         topSealRef.current.position.set(100, 100, 100);
+        topSealRef.current.rotation.set(0, 0, 0);
       }
     }
   });
@@ -276,46 +281,56 @@ function Pouch({ progress, tex, bumpTex, labelTex, toonGradient }: { progress: n
       {/* Bottom Part (Keeps everything below y=0.7) */}
       <group>
         <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipBottom]} />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipBottom]} />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipBottom]} />
         </RoundedBox>
         {/* Front Label Bottom */}
         <mesh position={[0, -0.1, 0.09]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipBottom]} />
         </mesh>
         {/* Back Label Bottom */}
         <mesh position={[0, -0.1, -0.09]} rotation={[0, Math.PI, 0]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipBottom]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipBottom]} />
         </mesh>
       </group>
       
       {/* Top Part (Tears Off, keeps everything above y=0.7) */}
       <group ref={topSealRef}>
         <RoundedBox args={[1.5, 2.0, 0.15]} position={[0, -0.1, 0]} radius={0.05} smoothness={4} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#e0c5aa" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipTop]} />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[-0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipTop]} />
         </RoundedBox>
         <RoundedBox args={[0.08, 2.0, 0.1]} position={[0.75, -0.1, 0]} radius={0.02} castShadow receiveShadow>
-          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={tex} color="#d4b496" side={THREE.DoubleSide} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipTop]} />
         </RoundedBox>
         {/* Front Label Top */}
         <mesh position={[0, -0.1, 0.09]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipTop]} />
         </mesh>
         {/* Back Label Top */}
         <mesh position={[0, -0.1, -0.09]} rotation={[0, Math.PI, 0]} receiveShadow>
           <planeGeometry args={[1.4, 1.9]} />
-          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} map={labelTex} transparent={true} alphaTest={0.05} clippingPlanes={[clipTop]} clipIntersection={false} />
+          <Outlines thickness={0.015} color="#1c1c1c" clippingPlanes={[clipTop]} />
         </mesh>
         
         
@@ -330,16 +345,17 @@ function Film({ progress, filmBumpTex, toonGradient }: { progress: number, filmB
 
   useFrame(() => {
     if (!ref.current || !matRef.current) return;
+    ref.current.visible = progress >= 0.145 && progress < 0.425;
+    // Derive the pose from scroll position even when the user skips a stage.
+    ref.current.rotation.set(mapRange(progress, 0.145, 0.235, 0, -0.5), 0, 0);
     if (progress < 0.145) {
       ref.current.position.set(0, 0.5, 1.5);
       matRef.current.opacity = 0;
     } else if (progress < 0.235) {
       matRef.current.opacity = 0.95;
       ref.current.position.set(0, mapRange(progress, 0.145, 0.235, 0.5, 1.5), mapRange(progress, 0.145, 0.235, 1.5, 2.5));
-      ref.current.rotation.set(mapRange(progress, 0.145, 0.235, 0, -0.5), 0, 0);
     } else if (progress < 0.325) {
       ref.current.position.set(0, 2, 0);
-      ref.current.rotation.set(-0.5, 0, 0);
       matRef.current.opacity = 0.95;
     } else if (progress < 0.425) {
       ref.current.position.set(0, mapRange(progress, 0.325, 0.425, 2, 0), 0);
@@ -353,7 +369,8 @@ function Film({ progress, filmBumpTex, toonGradient }: { progress: number, filmB
     <mesh ref={ref} castShadow>
       {/* 5x5 perfectly flat sheet (scaled slightly relative to scene) */}
       <planeGeometry args={[1.5, 1.5, 32, 32]} />
-      <meshToonMaterial gradientMap={toonGradient} ref={matRef} color="#f7f3ec" side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+      <meshToonMaterial gradientMap={toonGradient} ref={matRef} transparent color="#f7f3ec" side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" transparent opacity={mapRange(progress, 0.325, 0.425, 0.95, 0)} />
     </mesh>
   );
 }
@@ -384,6 +401,8 @@ function Glass({ progress, bumpTex, toonGradient }: { progress: number, bumpTex:
 
   useFrame(() => {
     if (!ref.current || !waterRef.current) return;
+    ref.current.rotation.set(0, 0, 0);
+    waterRef.current.color.setHex(0xcde3d6);
     if (progress < 0.235) {
       ref.current.position.set(0, -10, 0);
     } else if (progress < 0.515) {
@@ -392,7 +411,9 @@ function Glass({ progress, bumpTex, toonGradient }: { progress: number, bumpTex:
       waterRef.current.color.setHex(0xcde3d6); 
     } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 0, -2), mapRange(progress, 0.515, 0.635, 0, 1.5), 0);
+      ref.current.rotation.y = 0.515 * Math.PI;
       ref.current.rotation.z = mapRange(progress, 0.515, 0.635, 0, -Math.PI / 2.5);
+      waterRef.current.color.setHex(0x9cb8a5);
     } else {
       ref.current.position.set(0, -10, 0);
     }
@@ -423,11 +444,13 @@ function Glass({ progress, bumpTex, toonGradient }: { progress: number, bumpTex:
     <group ref={ref}>
       <mesh castShadow receiveShadow>
         <latheGeometry args={[glassPoints, 64]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" transparent opacity={0.3} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh ref={waterMeshRef} position={[0, 0.001, 0]}>
         <latheGeometry args={[waterPoints, 64]} />
-        <meshToonMaterial gradientMap={toonGradient} ref={waterRef as any} color="#72b2f2" opacity={0.6} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} ref={waterRef as any} color="#72b2f2" transparent opacity={0.6} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
     </group>
   );
@@ -454,15 +477,15 @@ function Bottle({ progress, bumpTex, toonGradient }: { progress: number, bumpTex
 
   useFrame(() => {
     if (!ref.current || !pumpRef.current) return;
+    ref.current.rotation.set(0, 0, 0);
+    pumpRef.current.position.y = progress < 0.635 ? 3 : mapRange(progress, 0.635, 0.715, 3, 0);
     if (progress < 0.425) {
       ref.current.position.set(10, -10, 0);
     } else if (progress < 0.635) {
       ref.current.position.set(mapRange(progress, 0.515, 0.635, 3, 0), 0, 0);
       ref.current.rotation.set(0, 0, 0);
-      pumpRef.current.position.y = 3;
     } else if (progress < 0.715) {
       ref.current.position.set(0, 0, 0);
-      pumpRef.current.position.y = mapRange(progress, 0.635, 0.715, 3, 0);
     } else if (progress < 0.805) {
       ref.current.position.set(mapRange(progress, 0.715, 0.805, 0, 0.5), mapRange(progress, 0.715, 0.805, 0, 0.5), 0);
       ref.current.rotation.z = Math.sin(progress * 150) * 0.15;
@@ -479,33 +502,40 @@ function Bottle({ progress, bumpTex, toonGradient }: { progress: number, bumpTex
     <group ref={ref}>
       <mesh castShadow receiveShadow>
         <latheGeometry args={[bottlePoints, 64]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#f4f1eb" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#f4f1eb" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       
       <group ref={pumpRef} position={[0, 0, 0]}>
         <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
           <cylinderGeometry args={[0.22, 0.22, 0.3, 64]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#d4d4d4" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#d4d4d4" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.15, 0]}>
           <cylinderGeometry args={[0.24, 0.24, 0.2, 64]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" transparent opacity={0.3} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.35, 0]}>
           <cylinderGeometry args={[0.2, 0.2, 0.3, 64]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" transparent opacity={0.3} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.5, 0]}>
           <sphereGeometry args={[0.2, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" transparent opacity={0.3} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0.25, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
           <cylinderGeometry args={[0.08, 0.08, 0.2, 32]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" opacity={0.3} side={THREE.DoubleSide} />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#dcedfc" transparent opacity={0.3} side={THREE.DoubleSide} />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
         <mesh castShadow receiveShadow position={[0.36, 1.35, 0]} rotation={[0, 0, -Math.PI/2]}>
           <cylinderGeometry args={[0.04, 0.04, 0.02, 32]} />
-          <meshToonMaterial gradientMap={toonGradient} color="#333333" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+          <meshToonMaterial gradientMap={toonGradient} color="#333333" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
         </mesh>
       </group>
     </group>
@@ -528,19 +558,23 @@ function Botanicals({ progress, bumpTex, toonGradient }: { progress: number, bum
     <group ref={ref}>
       <mesh castShadow receiveShadow position={[-2, 0.4, 1]}>
         <sphereGeometry args={[0.4, 64, 64]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#eb7b28" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#eb7b28" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[-1.2, 0.3, 1.8]}>
         <sphereGeometry args={[0.3, 64, 64]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#40592e" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#40592e" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[2, 0.1, 1]} rotation={[Math.PI/2, 0.2, 0.5]}>
         <cylinderGeometry args={[0.1, 0.1, 1.5, 32]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#5c4033" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#5c4033" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
       <mesh castShadow receiveShadow position={[1.5, 0.05, 1.5]} rotation={[-Math.PI/2, 0, 0.3]}>
         <cylinderGeometry args={[0.3, 0.3, 0.02, 32, 1, false, 0, Math.PI]} />
-        <meshToonMaterial gradientMap={toonGradient} color="#687d6d" />\n          <Outlines thickness={0.015} color="#1c1c1c" />
+        <meshToonMaterial gradientMap={toonGradient} color="#687d6d" />
+          <Outlines thickness={0.015} color="#1c1c1c" />
       </mesh>
     </group>
   );
@@ -578,6 +612,7 @@ function CameraAdjuster() {
     } else {
       camera.position.set(0, 1.5, 7);
     }
+    camera.lookAt(0, 0, 0);
   }, [camera, size]);
   return null;
 }
@@ -600,23 +635,29 @@ function Scene({ progress }: { progress: number }) {
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      setMats(ProceduralMaterials() as any);
+      const materials = ProceduralMaterials();
+      setMats(materials);
+      return () => Object.values(materials).forEach((texture) => texture.dispose());
     }
   }, []);
+
+  useEffect(() => {
+    return () => toonGradient.dispose();
+  }, [toonGradient]);
 
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 1.5, 7]} fov={30} />
-      <Environment preset="studio" environmentIntensity={1.2} />
         <CameraAdjuster />
             
-      <ambientLight intensity={0.1} color="#ffffff" />
+      <ambientLight intensity={0.6} color="#ffffff" />
       
       <SpotLight
         position={[5, 12, 6]}
         angle={0.4}
         penumbra={0.8}
         intensity={3.5}
+        decay={0}
         color="#fff5e6"
         castShadow
         shadow-mapSize={[4096, 4096]}
@@ -656,6 +697,7 @@ export function ChommsHouse3DHero({
   const [activeIdx, setActiveIdx] = useState(0);
   const [stepLocal, setStepLocal] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [autoPlay, setAutoPlay] = useState(true);
   
   useEffect(() => {
     const t = setTimeout(() => setLoaded(true), 1500);
@@ -666,6 +708,8 @@ export function ChommsHouse3DHero({
   useEffect(() => {
     let animationFrameId: number;
     let lastUserInteraction = Date.now();
+    let lastFrame = 0;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let scrollingDown = true;
 
     const onUserInteraction = () => {
@@ -678,9 +722,11 @@ export function ChommsHouse3DHero({
     window.addEventListener('mousedown', onUserInteraction);
     window.addEventListener('touchstart', onUserInteraction);
 
-    const autoScroll = () => {
-      if (Date.now() - lastUserInteraction > 10000) {
-        window.scrollBy({ top: scrollingDown ? 1.5 : -1.5, behavior: 'instant' });
+    const autoScroll = (time: number) => {
+      const delta = lastFrame ? Math.min(time - lastFrame, 50) : 0;
+      lastFrame = time;
+      if (!document.hidden && !reducedMotion.matches && Date.now() - lastUserInteraction > 10000) {
+        window.scrollBy({ top: (scrollingDown ? 1 : -1) * delta * 0.09, behavior: 'instant' });
         if (window.scrollY >= document.body.scrollHeight - window.innerHeight - 10) {
            scrollingDown = false;
         } else if (window.scrollY <= 10) {
@@ -690,7 +736,7 @@ export function ChommsHouse3DHero({
       animationFrameId = requestAnimationFrame(autoScroll);
     };
     
-    autoScroll();
+    if (autoPlay) animationFrameId = requestAnimationFrame(autoScroll);
 
     return () => {
       window.removeEventListener('wheel', onUserInteraction);
@@ -700,7 +746,7 @@ export function ChommsHouse3DHero({
       window.removeEventListener('touchstart', onUserInteraction);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [autoPlay]);
 
   const stepIndexFor = useCallback((p: number) => {
     for (let i = 0; i < steps.length; i++) {
@@ -712,8 +758,10 @@ export function ChommsHouse3DHero({
   const onScroll = useCallback(() => {
     const spacer = spacerRef.current;
     if (!spacer) return;
-    const total = Math.max(1, spacer.offsetHeight - window.innerHeight);
-    const p = clamp(window.scrollY / total);
+    const root = spacer.parentElement!;
+    const total = Math.max(1, root.offsetHeight - window.innerHeight);
+    const top = root.getBoundingClientRect().top + window.scrollY;
+    const p = clamp((window.scrollY - top) / total);
     const idx = stepIndexFor(p);
     const s = steps[idx];
     const local = clamp((p - s.from) / Math.max(0.0001, s.to - s.from));
@@ -744,22 +792,29 @@ export function ChommsHouse3DHero({
 
       <div className="ch-stage">
         <div className="ch-canvas-wrap">
+          <WebGLBoundary fallback={
+            <div className="ch-static-scene">
+              <Image src="/hero-product.jpg" alt="Chomm’s House repellent film and spray bottle" fill priority sizes="100vw" style={{ objectFit: "contain" }} />
+              <p className="ch-static-note">Product view · Scroll to explore all 11 steps</p>
+            </div>
+          }>
           <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2, localClippingEnabled: true }}>
             <React.Suspense fallback={null}>
               <Scene progress={progress} />
             </React.Suspense>
           </Canvas>
+          </WebGLBoundary>
         </div>
 
         <div className="ch-copy">
           <h1 className="ch-title">{title}</h1>
-          {subtitle && <p className={cx("ch-sub", progress > 0.02 && "ch-sub-hidden")}>{subtitle}</p>}
+          {subtitle && <div className={cx("ch-sub", progress > 0.02 && "ch-sub-hidden")}>{subtitle}</div>}
         </div>
 
         <div className="ch-card-wrap">
           {steps.map((s, i) => (
             <article key={s.num} className={cx("ch-card", i === activeIdx && "ch-card-active", i < activeIdx && "ch-card-prev")}
-              style={{ ["--c" as any]: s.color }} aria-hidden={i !== activeIdx}>
+              style={{ "--c": s.color } as React.CSSProperties} aria-hidden={i !== activeIdx} inert={i !== activeIdx}>
               <div className="ch-card-inner">
                 <div className="ch-card-head">
                   <span className="ch-card-num"><strong>{s.num}</strong> / {s.total}</span>
@@ -782,7 +837,8 @@ export function ChommsHouse3DHero({
           ))}
         </div>
 
-        <div className="ch-progress"><span style={{ width: `${progress * 100}%` }} /></div>
+        <div className="ch-progress"><span className="ch-progress-fill" style={{ width: `${progress * 100}%` }} /></div>
+        <button type="button" className="ch-autoplay" aria-pressed={!autoPlay} onClick={() => setAutoPlay((value) => !value)}>{autoPlay ? "Pause auto-scroll" : "Resume auto-scroll"}</button>
         <div className="ch-step-badge">{String(activeIdx + 1).padStart(2, "0")} <i/> {String(steps.length).padStart(2, "0")}</div>
       </div>
 

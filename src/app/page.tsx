@@ -151,10 +151,10 @@ export default function Home() {
         ctaLabel="Explore"
         ctaHref="#how-to-use"
         title={
-          <div className="flex flex-col items-start mt-2">
-            <span className="text-[#fbf9f6] text-2xl md:text-4xl font-semibold mb-0 md:mb-1">Chomm's House</span>
+          <span className="flex flex-col items-start mt-2">
+            <span className="text-[#fbf9f6] text-2xl md:text-4xl font-semibold mb-0 md:mb-1">Chomm&apos;s House</span>
             <span className="text-[#a9c9b5] text-lg md:text-2xl font-light italic">Natural Protection</span>
-          </div>
+          </span>
         }
         subtitle={<p className="text-sm text-[#a49e95] mt-2">Scroll to experience.</p>}
         steps={steps}

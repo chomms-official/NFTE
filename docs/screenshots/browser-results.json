@@ -1,0 +1,14 @@
+{
+  "groups": 2,
+  "passed": [
+    "home no-webgl: hydration, all 11 steps, images and scroll progress",
+    "simulator no-webgl: country details, species, chart controls and revisit",
+    "simulator: failed GeoJSON request shows retry and recovers",
+    "mobile: usable no-WebGL country selection and close control",
+    "presentation: keyboard, forward/back looping, wheel, touch coordinate zero, reduced motion",
+    "service worker: activation preserves user storage and supports offline reload",
+    "home webgl: hydration, all 11 steps, images and scroll progress",
+    "home: loss of an existing WebGL context recovers to product view",
+    "simulator webgl: country details, species, chart controls and revisit"
+  ]
+}

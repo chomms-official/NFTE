@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-react";
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
 import * as THREE from "three";
+import { WebGLBoundary } from "./webgl-boundary";
+import { countryCenter, countryRisk, simulationSeed, scaleSimulatedHistory } from "@/lib/simulator";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -311,7 +313,20 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
-  const [prevCoords, setPrevCoords] = useState<{lat: number, lng: number} | null>(null);
+  const prevCoords = useRef<{lat: number, lng: number} | null>(null);
+  const [globeReady, setGlobeReady] = useState(false);
+  const [geoJsonStatus, setGeoJsonStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [simulationDate] = useState(() => Date.now());
+  const [autoTourEnabled, setAutoTourEnabled] = useState(true);
+  const autoTourEnabledRef = useRef(autoTourEnabled);
+  const attachGlobe = useMemo(() => ({
+    get current() { return globeEl.current; },
+    set current(instance: any) {
+      globeEl.current = instance;
+      if (!instance) setGlobeReady(false);
+    },
+  }), []);
   const airplaneMeshRef = useRef<THREE.Group | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -319,23 +334,25 @@ export default function OutbreakGlobe() {
 
   const [windowHeight, setWindowHeight] = useState(800);
 
-  const cancelFlight = () => {
+  const cancelFlight = useCallback(() => {
     if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    flightTimerRef.current = null;
+    animationFrameRef.current = null;
     
     if (globeEl.current) {
       const scene = globeEl.current.scene();
       if (airplaneMeshRef.current) {
         scene.remove(airplaneMeshRef.current);
       }
-      if (trailLineRef.current) {
-        scene.remove(trailLineRef.current);
-        if (trailLineRef.current.geometry) trailLineRef.current.geometry.dispose();
-        if (trailLineRef.current.material) (trailLineRef.current.material as THREE.Material).dispose();
-        trailLineRef.current = null;
-      }
+      if (trailLineRef.current) scene.remove(trailLineRef.current);
     }
-  };
+    if (trailLineRef.current) {
+      trailLineRef.current.geometry.dispose();
+      (trailLineRef.current.material as THREE.Material).dispose();
+      trailLineRef.current = null;
+    }
+  }, []);
 
   const handleSelectCountry = (countryFeature: any, isManual = false) => {
     cancelFlight();
@@ -345,30 +362,15 @@ export default function OutbreakGlobe() {
       setAutoTourEnabled(false);
     }
     
-    // Accurately calculate destination using country centroids (LABEL_X, LABEL_Y) for high precision
-    let destLng = 0;
-    let destLat = 0;
-    if (countryFeature.properties?.LABEL_X !== undefined && countryFeature.properties?.LABEL_Y !== undefined) {
-      destLng = Number(countryFeature.properties.LABEL_X);
-      destLat = Number(countryFeature.properties.LABEL_Y);
-    } else if (countryFeature.properties?.LON !== undefined && countryFeature.properties?.LAT !== undefined) {
-      destLng = Number(countryFeature.properties.LON);
-      destLat = Number(countryFeature.properties.LAT);
-    } else {
-      // Absolute fallback: use the first vertex (inaccurate for large countries)
-      let pt = countryFeature.geometry?.coordinates;
-      while (pt && Array.isArray(pt[0])) pt = pt[0];
-      destLng = pt ? pt[0] : 0;
-      destLat = pt ? pt[1] : 0;
-    }
+    const { lat: destLat, lng: destLng } = countryCenter(countryFeature);
     
     // Get current view for flight start
     let startLat = 0;
     let startLng = 0;
     
-    if (prevCoords) {
-      startLat = prevCoords.lat;
-      startLng = prevCoords.lng;
+    if (prevCoords.current) {
+      startLat = prevCoords.current.lat;
+      startLng = prevCoords.current.lng;
     } else if (globeEl.current) {
       const pov = globeEl.current.pointOfView();
       startLat = pov.lat;
@@ -386,7 +388,12 @@ export default function OutbreakGlobe() {
     
     const endLat = destLat;
 
-    // Hide modal instantly
+    // Details remain usable even when this browser cannot render a globe.
+    if (!globeEl.current || !globeReady) {
+      setActiveCountry(countryFeature);
+      prevCoords.current = { lat: destLat, lng: destLng };
+      return;
+    }
     setActiveCountry(null);
 
     if (globeEl.current) {
@@ -439,6 +446,7 @@ export default function OutbreakGlobe() {
       const maxAltitude = 25; // 25 units above the globe surface (globe R=100)
       
       const animateFlight = (time: number) => {
+        if (!globeEl.current) return;
         let t = (time - startTime) / flightDuration;
         if (t > 1) t = 1;
         
@@ -486,6 +494,8 @@ export default function OutbreakGlobe() {
           scene.remove(trailLine);
           trailGeo.dispose();
           trailMat.dispose();
+          trailLineRef.current = null;
+          animationFrameRef.current = null;
         }
       };
       
@@ -494,14 +504,16 @@ export default function OutbreakGlobe() {
       // Wait for flight to finish before showing modal
       flightTimerRef.current = setTimeout(() => {
         setActiveCountry(countryFeature);
-        setPrevCoords({ lat: destLat, lng: destLng }); // Store for next flight
+        prevCoords.current = { lat: destLat, lng: destLng }; // Store for next flight
+        flightTimerRef.current = null;
       }, flightDuration);
     }
   };
 
+  const selectCountryRef = useRef(handleSelectCountry);
+  useEffect(() => { selectCountryRef.current = handleSelectCountry; });
+
   // --- TOUR MODE (ATTRACT MODE) ---
-  const [autoTourEnabled, setAutoTourEnabled] = useState(true);
-  const autoTourEnabledRef = useRef(autoTourEnabled);
   useEffect(() => {
     autoTourEnabledRef.current = autoTourEnabled;
   }, [autoTourEnabled]);
@@ -516,10 +528,10 @@ export default function OutbreakGlobe() {
 
   // 2. Handle Tour Loop
   useEffect(() => {
-    if (!autoTourEnabled || geoJsonData.length === 0) {
+    if (!autoTourEnabled || !globeReady || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
       // When user interrupts tour, reset rotation (unless they are interacting with a country)
-      if (!autoTourEnabled && globeEl.current && !activeCountry) {
+      if (!autoTourEnabled && globeEl.current && !activeCountry && !flightTimerRef.current) {
         globeEl.current.controls().autoRotate = true;
       }
       return;
@@ -546,7 +558,7 @@ export default function OutbreakGlobe() {
       tourCountryIndexRef.current = 0;
       
       if (tourCountriesRef.current.length > 0) {
-        handleSelectCountry(tourCountriesRef.current[0]);
+        selectCountryRef.current(tourCountriesRef.current[0]);
       }
     };
 
@@ -556,7 +568,7 @@ export default function OutbreakGlobe() {
         tourMosquitoIndexRef.current = (tourMosquitoIndexRef.current + 1) % tourMosquitoOrder.length;
         startTourCycle();
       } else {
-        handleSelectCountry(tourCountriesRef.current[tourCountryIndexRef.current]);
+        selectCountryRef.current(tourCountriesRef.current[tourCountryIndexRef.current]);
       }
     };
 
@@ -570,7 +582,11 @@ export default function OutbreakGlobe() {
     return () => {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
     };
-  }, [autoTourEnabled, geoJsonData]);
+  }, [autoTourEnabled, geoJsonData, globeReady]);
+
+  useEffect(() => {
+    if (!globeReady) cancelFlight();
+  }, [globeReady, cancelFlight]);
 
   // Responsive setup
   useEffect(() => {
@@ -583,22 +599,6 @@ export default function OutbreakGlobe() {
     };
     handleResize();
     window.addEventListener("resize", handleResize);
-    
-    // Fetch topology only once from local assets for blazing fast speed
-    fetch("/assets/countries.geojson")
-      .then(res => res.json())
-      .then(data => {
-        // Fix: Remove internal holes (lakes/ice sheets) from GeoJSON to prevent "white/black block" artifacts
-        const cleanedFeatures = data.features.map((f: any) => {
-          if (f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0) {
-            f.geometry.coordinates = [f.geometry.coordinates[0]];
-          } else if (f.geometry.type === "MultiPolygon" && f.geometry.coordinates.length > 0) {
-            f.geometry.coordinates = f.geometry.coordinates.map((polygon: any) => [polygon[0]]);
-          }
-          return f;
-        });
-        setGeoJsonData(cleanedFeatures);
-      });
       
     return () => {
       window.removeEventListener("resize", handleResize);
@@ -623,35 +623,44 @@ export default function OutbreakGlobe() {
     };
   }, []);
 
+  // Abort stale fetches on retries/unmount; a failed asset must not leave a blank globe.
+  useEffect(() => {
+    const controller = new AbortController();
+    setGeoJsonStatus("loading");
+    fetch("/assets/countries.geojson", { signal: controller.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`Country data returned ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(data.features) || !data.features.length || data.features.some((f: any) =>
+          !f?.properties || !f?.geometry || !Array.isArray(f.geometry.coordinates)
+        )) throw new Error("Invalid country data");
+        const cleanedFeatures = data.features.map((f: any) => ({
+          ...f,
+          geometry: { ...f.geometry, coordinates: f.geometry.type === "Polygon"
+            ? [f.geometry.coordinates[0]]
+            : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates.map((polygon: any) => [polygon[0]]) : f.geometry.coordinates }
+        }));
+        setGeoJsonData(cleanedFeatures);
+        setGeoJsonStatus("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setGeoJsonStatus("error");
+      });
+    return () => controller.abort();
+  }, [loadAttempt]);
+
   // Compute countries with currently selected mosquito risk data
   const countries = useMemo(() => {
     if (!geoJsonData.length) return [];
     
     const currentData = MOSQUITO_DATA[activeMosquito].riskMap;
     
-    return geoJsonData.map((f: any) => {
-      const name = f.properties.ADMIN || f.properties.NAME;
-      let risk = currentData[name];
-      
-      if (risk === undefined) {
-        // Fallback default logic based on mosquito type
-        let pt = f.geometry.coordinates;
-        while (pt && Array.isArray(pt[0])) pt = pt[0];
-        const lat = pt[1] || 0;
-        const absLat = Math.abs(lat);
-        
-        if (activeMosquito === "aedes") {
-          risk = absLat < 35 ? Math.random() * 3 + 2 : Math.random();
-        } else if (activeMosquito === "anopheles") {
-          risk = absLat < 20 ? Math.random() * 2 + 1 : Math.random();
-        } else {
-          // Culex is more widespread
-          risk = absLat < 50 ? Math.random() * 3 + 2 : Math.random();
-        }
-      }
-      
-      return { ...f, properties: { ...f.properties, risk } };
-    });
+    return geoJsonData.map((f: any) => ({
+      ...f, properties: { ...f.properties, risk: countryRisk(f, activeMosquito, currentData) }
+    }));
   }, [geoJsonData, activeMosquito]);
 
   // Compute hotspots for the active mosquito
@@ -677,7 +686,7 @@ export default function OutbreakGlobe() {
   }, [activeCountry]);
 
   const handlePolygonHover = useCallback((d: any) => {
-    if (globeEl.current && !activeCountry) {
+    if (globeEl.current && !activeCountry && !flightTimerRef.current) {
       globeEl.current.controls().autoRotate = !d;
     }
   }, [activeCountry]);
@@ -716,103 +725,40 @@ export default function OutbreakGlobe() {
   const getPolygonStrokeColor = useCallback(() => "#111111", []);
 
 
-  // Setup globe controls on mount/change
+  // The dynamic child becomes ready asynchronously; changing a ref does not rerender React.
   useEffect(() => {
-    if (globeEl.current && mounted) {
-      const controls = globeEl.current.controls();
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.15; 
-      controls.enableZoom = true;
-      
-      const handleControlStart = () => {
-        if (autoTourEnabledRef.current) {
-          cancelFlight();
-          setAutoTourEnabled(false);
-        }
-      };
-      
-      // 100% reliable detection of user manipulating the 3D globe (pan, zoom, rotate)
-      controls.addEventListener('start', handleControlStart);
-      
-      // If no active country, look at the first hotspot of the active mosquito
-      if (!activeCountry && MOSQUITO_DATA[activeMosquito].hotspots.length > 0) {
-        const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
-        const ms = isInitialView.current ? 0 : 1500;
-        globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, ms);
-        isInitialView.current = false;
-      }
-      
-      return () => {
-        controls.removeEventListener('start', handleControlStart);
-      };
+    if (!globeReady || !globeEl.current) return;
+    const controls = globeEl.current.controls();
+    controls.autoRotate = !autoTourEnabledRef.current;
+    controls.autoRotateSpeed = 0.15;
+    controls.enableZoom = true;
+    const handleControlStart = () => {
+      cancelFlight();
+      controls.autoRotate = false;
+      if (autoTourEnabledRef.current) setAutoTourEnabled(false);
+    };
+    controls.addEventListener('start', handleControlStart);
+    if (isInitialView.current && !autoTourEnabledRef.current) {
+      const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
+      globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, 0);
     }
-  }, [mounted, activeMosquito, globeEl.current]);
+    isInitialView.current = false;
+    return () => controls.removeEventListener('start', handleControlStart);
+    // The controls belong to the renderer; species changes must not interrupt a flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globeReady, cancelFlight]);
 
   // Compute skyline historical data for the clicked country
   const countryData = useMemo<ContributionDay[]>(() => {
     if (!activeCountry) return [];
-    const countryName = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
-    const seed = countryName.length * 10 + (activeMosquito.length * 5);
-    // Use explicit risk or fallback based on latitude
-    let risk = MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.ADMIN] ?? MOSQUITO_DATA[activeMosquito].riskMap[activeCountry.properties.NAME];
-    if (risk === undefined) {
-      const lat = Math.abs(activeCountry.properties.LABEL_Y || activeCountry.properties.LAT || 0);
-      if (lat < 15) risk = 4.5;
-      else if (lat < 30) risk = 3.0;
-      else if (lat < 45) risk = 1.5;
-      else risk = 0.5;
-    }
-    const raw = generateContributions(Date.now(), seed, 365);
+    const risk = countryRisk(activeCountry, activeMosquito, MOSQUITO_DATA[activeMosquito].riskMap);
+    const raw = generateContributions(simulationDate, simulationSeed(activeCountry, activeMosquito), 365);
+    return scaleSimulatedHistory(activeCountry, activeMosquito, risk, raw);
+  }, [activeCountry, activeMosquito, simulationDate]);
     
-    // Fix: Accurate and realistic data scaling based on population!
-    const popStr = activeCountry.properties.POP_EST || activeCountry.properties.POP_EST_ || 0;
-    const population = Number(popStr) || 1000000;
-    
-    // Scale cases realistically: higher risk = more cases, proportional to population.
-    // Use a gentler power (1.8) so even low-risk countries show meaningful surveillance data.
-    // Minimum of 50 yearly cases to represent imported/sporadic cases even in low-risk areas.
-    const rawYearlySum = raw.reduce((acc, d) => acc + d.count, 0) || 2000;
-    const targetYearlyCases = Math.max(50, population * Math.pow((risk / 10), 1.8) * 0.08);
-    const riskMultiplier = targetYearlyCases / rawYearlySum;
-
-    return raw.map((d) => ({
-      date: d.date,
-      count: d.count === 0 ? 0 : Math.floor(d.count * riskMultiplier * (0.8 + Math.random() * 0.4))
-    }));
-  }, [activeCountry, activeMosquito]);
-
-  // Calculate live risk for the active country based on the selected mosquito
-  const activeCountryLiveRisk = useMemo(() => {
-    if (!activeCountry) return 0;
-    const name = activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown";
-    const explicitRisk = MOSQUITO_DATA[activeMosquito].riskMap[name];
-    if (explicitRisk !== undefined) return explicitRisk;
-    
-    // Fallback: estimate risk from latitude, tailored per mosquito type
-    const coords = activeCountry.properties;
-    const lat = Math.abs(coords.LABEL_Y || coords.LAT || 0);
-    
-    let baseRisk = 0.5;
-    if (lat < 15) baseRisk = 4.5;       // Deep tropics
-    else if (lat < 30) baseRisk = 3.0;  // Subtropics
-    else if (lat < 45) baseRisk = 1.5;  // Temperate
-
-    // Apply specific mosquito survival penalties for cold regions (high latitude)
-    if (activeMosquito === 'aedes') {
-      if (lat >= 45) return 0.2; // Aedes can't survive harsh winters
-      return baseRisk + 0.3;
-    }
-    if (activeMosquito === 'anopheles') {
-      if (lat >= 45) return 0.1; // Eradicated in most cold countries
-      return baseRisk;
-    }
-    if (activeMosquito === 'culex') {
-      if (lat >= 45) return 1.8; // Culex (West Nile) actually thrives in temperate summers
-      return baseRisk + 0.1;
-    }
-    
-    return baseRisk;
-  }, [activeCountry, activeMosquito]);
+  const activeCountryLiveRisk = useMemo(() => activeCountry
+    ? countryRisk(activeCountry, activeMosquito, MOSQUITO_DATA[activeMosquito].riskMap) : 0,
+  [activeCountry, activeMosquito]);
 
   if (!mounted) return null;
 
@@ -820,8 +766,26 @@ export default function OutbreakGlobe() {
     <div className="relative w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
       <div id="globe-container" className="absolute inset-0 cursor-move">
+        <WebGLBoundary fallback={
+          <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6 pb-48 pt-36 text-center">
+            <h1 className="text-xl font-bold">Mosquito outbreak simulator</h1>
+            <p className="max-w-sm text-sm text-zinc-300">The interactive globe is unavailable on this device. Select a country to explore the same simulated data.</p>
+            <label className="text-sm" htmlFor="fallback-country">Country</label>
+            <select id="fallback-country" className="bg-zinc-900 text-white border border-white/30 rounded-lg p-3 max-w-full" value="" disabled={geoJsonStatus !== "ready"}
+              onChange={event => {
+                const country = countries.find((f: any) => (f.properties.ADMIN || f.properties.NAME) === event.target.value);
+                if (country) { setAutoTourEnabled(false); cancelFlight(); setActiveCountry(country); }
+              }}>
+              <option value="" disabled>{geoJsonStatus === "loading" ? "Loading countries…" : "Select a country"}</option>
+              {[...countries].sort((a: any, b: any) => String(a.properties.ADMIN || a.properties.NAME).localeCompare(String(b.properties.ADMIN || b.properties.NAME))).map((f: any) => (
+                <option key={f.properties.ADMIN || f.properties.NAME} value={f.properties.ADMIN || f.properties.NAME}>{f.properties.ADMIN || f.properties.NAME}</option>
+              ))}
+            </select>
+          </div>
+        }>
         <Globe
-          ref={globeEl}
+          ref={attachGlobe}
+          onGlobeReady={() => setGlobeReady(true)}
           width={windowWidth}
           height={windowHeight}
           backgroundColor="rgba(0,0,0,0)"
@@ -851,7 +815,12 @@ export default function OutbreakGlobe() {
           htmlElementsData={ringData}
           htmlElement={createHtmlElement}
         />
+        </WebGLBoundary>
       </div>
+
+      {geoJsonStatus === "error" && <div role="alert" className="absolute top-36 z-[1000] max-w-sm p-4 text-center rounded-xl bg-zinc-900 border border-red-500/50">
+        Country data could not be loaded. <button className="underline" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry country data</button>
+      </div>}
 
       {/* TOP CONTROLS: Mosquito Selectors */}
       <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[999] pointer-events-auto w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
@@ -866,11 +835,9 @@ export default function OutbreakGlobe() {
             <button
               key={key}
               onClick={() => {
+                cancelFlight();
                 setActiveMosquito(key);
-                if (autoTourEnabled) {
-                  cancelFlight();
-                  setAutoTourEnabled(false);
-                }
+                setAutoTourEnabled(false);
               }}
               className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap shrink-0 ${
                 isActive 
@@ -898,6 +865,8 @@ export default function OutbreakGlobe() {
       }`}>
         <button
           id="auto-tour-btn"
+          disabled={!globeReady || geoJsonStatus !== "ready"}
+          aria-pressed={autoTourEnabled && globeReady}
           onClick={() => {
             if (autoTourEnabled) {
               cancelFlight();
@@ -913,7 +882,7 @@ export default function OutbreakGlobe() {
               : "bg-white/10 text-white border border-white/20 hover:bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
           }`}
         >
-          {autoTourEnabled ? (
+          {autoTourEnabled && globeReady ? (
             <>
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]"></span>
               Autopilot Active
@@ -930,7 +899,7 @@ export default function OutbreakGlobe() {
       <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
         <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
           <ActivityIcon className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" /> 
-          Risk Heatmap (Live)
+          Simulated Risk Heatmap
         </h4>
         <div className="flex flex-col gap-2 sm:gap-3.5">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -955,7 +924,7 @@ export default function OutbreakGlobe() {
         </h4>
         <p className="text-[8px] sm:text-xs text-zinc-400 leading-relaxed mb-2 sm:mb-3">
           Primarily responsible for transmitting <strong className="text-zinc-200">{MOSQUITO_DATA[activeMosquito].diseases}</strong>. 
-          The data points highlight current highly active global breeding clusters.
+          Scores and hotspots are illustrative simulation inputs, not live surveillance data.
         </p>
         <a 
           href={MOSQUITO_DATA[activeMosquito].sourceUrl} 
@@ -963,7 +932,7 @@ export default function OutbreakGlobe() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[8px] sm:text-[10px] font-medium text-red-400 hover:text-red-300 transition-colors underline underline-offset-2 decoration-red-900/50"
         >
-          Source: {MOSQUITO_DATA[activeMosquito].sourceName}
+          Background: {MOSQUITO_DATA[activeMosquito].sourceName}
           <svg className="w-2 sm:w-2.5 h-2 sm:h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
@@ -977,6 +946,7 @@ export default function OutbreakGlobe() {
           {/* Fixed Header with Close Button */}
           <div className="flex justify-end p-4 pt-36 md:p-8 shrink-0">
             <button 
+              aria-label="Close country details"
               onClick={() => {
                 setActiveCountry(null);
                 if (globeEl.current) {
@@ -1033,21 +1003,21 @@ export default function OutbreakGlobe() {
                   <span className="w-2.5 h-2.5 rounded-full animate-ping absolute" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></span>
                   <span className="w-2.5 h-2.5 rounded-full relative" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></span>
                   <span className="font-bold text-white tracking-widest uppercase text-xs">
-                    {MOSQUITO_DATA[activeMosquito].name} Outbreak History
+                    {MOSQUITO_DATA[activeMosquito].name} Simulated History
                   </span>
                 </div>
               }
-              className="border-none bg-transparent"
+              className="border-none bg-transparent [--color-background:#0a0a0a] [--color-foreground:#fbf9f6] [--color-border:#27272a]"
             />
           </div>
 
           <div className="mt-10 text-zinc-400 text-xs sm:text-sm leading-relaxed border-t border-white/10 pt-6 sm:pt-8 max-w-2xl">
             <p className="mb-3">
-              This historical data visualization represents the recorded <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak cases for <strong className="text-white">{activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}</strong> over the past 12 months. 
-              The 3D skyline map highlights severe spikes and seasonal trends corresponding to mosquito breeding seasons.
+              This illustrative visualization uses generated, simulated <strong className="text-white">{MOSQUITO_DATA[activeMosquito].diseases}</strong> outbreak counts for <strong className="text-white">{activeCountry.properties.ADMIN || activeCountry.properties.NAME || "Unknown"}</strong> over the past 12 months.
+              It demonstrates possible patterns and is not a record of reported cases or a forecast. The links below provide general disease background, not the plotted numbers.
             </p>
             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5">
-              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-500">Data Source:</span>
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-500">Background:</span>
               <a 
                 href={MOSQUITO_DATA[activeMosquito].sourceUrl} 
                 target="_blank" 

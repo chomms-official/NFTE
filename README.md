@@ -34,3 +34,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Regression checks
+
+```bash
+npm ci
+npm test
+npm run build
+npm run start -- --port 3001
+```
+
+In another terminal, run `npm run test:browser`. Install the matching browser with
+`npx playwright install chromium`, or set `CHROMIUM_PATH` to an installed Chromium
+binary (for this cloud environment: `/usr/bin/chromium`). `BASE_URL` can override
+the default test server at port 3001; `QA_ARTIFACTS` selects the screenshot directory.
+The tests cover all three pages, disabled WebGL/context loss, mobile input, simulator
+retry and service-worker storage preservation/offline navigation.
+
+Use the Vercel **Next.js** preset. The application requires the standard Next runtime
+for host-based routing; remove any manually configured `out` output directory.
+Fonts are bundled locally with their license. See [the detailed bug audit](docs/bug-audit.md)
+for architecture, diagnosed fixes and the remaining lint/production-validation limits.

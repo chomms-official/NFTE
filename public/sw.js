@@ -1,8 +1,11 @@
-const CACHE_NAME = 'mozziemap-cache-v5';
+const CACHE_NAME = 'mozziemap-cache-v6';
+const APP_CACHE_PATTERN = /^mozziemap-cache-v\d+$/;
+const PAGE_PATHS = new Set(['/', '/simulator', '/sent-scent']);
 
 const ASSETS_TO_CACHE = [
   '/',
   '/simulator',
+  '/sent-scent',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
@@ -13,88 +16,110 @@ const ASSETS_TO_CACHE = [
   '/assets/night-sky.png'
 ];
 
+function canCacheResponse(response) {
+  return response.ok &&
+    !/(?:private|no-store)/i.test(response.headers.get('Cache-Control') || '') &&
+    !(response.headers.get('Content-Type') || '').includes('text/x-component');
+}
+
+// Cache storage can be unavailable or full. It must never break an online page.
+async function storeResponse(request, response) {
+  if (!canCacheResponse(response)) return;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response);
+  } catch {
+    // The network response remains usable even when offline storage is unavailable.
+  }
+}
+
+async function findCachedResponse(request) {
+  try {
+    // Keep previous app versions available for already-open/offline tabs, and
+    // never read or delete another application's caches or user data.
+    const names = (await caches.keys()).filter((name) => APP_CACHE_PATTERN.test(name));
+    names.sort((a, b) => Number(b.split('-v').pop()) - Number(a.split('-v').pop()));
+    for (const name of [CACHE_NAME, ...names.filter((name) => name !== CACHE_NAME)]) {
+      const cache = await caches.open(name);
+      const response = await cache.match(request);
+      if (response && canCacheResponse(response)) return response;
+    }
+  } catch {
+    // An unavailable cache is equivalent to an offline cache miss.
+  }
+  return undefined;
+}
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
+  event.waitUntil((async () => {
+    // One unavailable asset must not prevent the safer worker from installing.
+    await Promise.all(ASSETS_TO_CACHE.map(async (path) => {
+      try {
+        const request = new Request(new URL(path, self.location.origin), { cache: 'reload' });
+        const response = await fetch(request);
+        if (response.ok) await storeResponse(request, response);
+      } catch {
+        // Previously cached assets remain available when installation is offline.
+      }
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    }).then(() => self.clients.claim())
-  );
+  // Do not clear caches, localStorage, IndexedDB, or any other user storage.
+  // Old hashed bundles can still be needed by tabs opened before an update.
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
-  // We only want to handle GET requests
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
-  
-  // Exclude API routes, next internal hot-reloading, etc.
-  if (url.pathname.startsWith('/api') || url.pathname.includes('/_next/webpack-hmr')) {
-    return;
-  }
+  const url = new URL(request.url);
+  // React Server Component responses are not HTML. Let Next.js manage them;
+  // caching them as an ordinary page can mix deployments and break hydration.
+  if (
+    url.origin !== self.location.origin ||
+    url.search ||
+    request.cache === 'no-store' ||
+    request.headers.has('Authorization') ||
+    request.headers.has('RSC') ||
+    request.headers.has('Next-Router-Prefetch') ||
+    request.headers.has('Next-Router-State-Tree') ||
+    (request.headers.get('accept') || '').includes('text/x-component')
+  ) return;
 
-  // For HTML navigation requests (e.g. hitting the page URL)
-  // Use Network First, fallback to cache if offline
-  if (event.request.mode === 'navigate' || (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'))) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Clone and cache the new response
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-          return response;
-        })
-        .catch(() => {
-          // If network fails (offline), return from cache
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
+  const pathname = url.pathname.replace(/\/$/, '') || '/';
+  const isPage = request.mode === 'navigate' && PAGE_PATHS.has(pathname);
+  const isStaticAsset =
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/assets/countries.geojson' ||
+    /^\/(?:assets\/|presentation\/|storyboard\/|product-frames\/)?[^/]+\.(?:png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|otf)$/.test(url.pathname);
+  if (!isPage && !isStaticAsset) return;
 
-  // For static assets (JS, CSS, Images)
-  // Use Stale-While-Revalidate or Cache First
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch new version in background to keep cache fresh
-        event.waitUntil(
-          fetch(event.request).then((response) => {
-            if (response && response.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, response);
-              });
-            }
-          }).catch(() => {}) // Ignore background fetch errors
-        );
-        return cachedResponse;
-      }
+  // Network first keeps HTML and non-hashed assets current across deployments.
+  const result = (async () => {
+    try {
+      const response = await fetch(request);
+      return { response, cacheCopy: response.ok ? response.clone() : null };
+    } catch {
+      const cached = await findCachedResponse(request);
+      return {
+        response: cached || new Response('This content is unavailable offline. Please reconnect and try again.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        }),
+        cacheCopy: null
+      };
+    }
+  })();
 
-      // If not in cache, fetch from network and cache it
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200) {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        return response;
-      });
-    })
-  );
+  event.respondWith(result.then(({ response }) => response));
+  // Register this synchronously and await the actual write, so the worker is
+  // kept alive until caching completes rather than losing writes on shutdown.
+  event.waitUntil(result.then(({ cacheCopy }) => {
+    if (cacheCopy) return storeResponse(request, cacheCopy);
+  }));
 });
