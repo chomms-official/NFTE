@@ -8,6 +8,8 @@
 
 หน้าแรกไม่มีภาพหรือการ์ดสินค้า Chomm’s House เมื่อเบราว์เซอร์ใช้ WebGL ไม่ได้ ระบบจะใช้ software globe ทรงกลมที่ลาก/ซูม/เลือกประเทศได้แทน และยังดูข้อมูลชุดเดียวกันได้
 
+เลือกประเทศจากรายการหรือคลิกบนลูกโลกเพื่อดูเที่ยวบินและซูมเข้าประเทศ ใช้ปุ่ม +/− ล้อเมาส์ หรือกาง/หุบสองนิ้วเพื่อซูมต่อได้ ปุ่มรีเซ็ตกลับมุมมองโลก บนมือถือรายละเอียดอยู่ครึ่งล่างเพื่อให้แผนที่ยังใช้งานได้
+
 คะแนน hotspot และประวัติรายวันเป็นข้อมูลจำลองในโปรเจกต์ ไม่ใช่รายงานเฝ้าระวังโรคแบบสด ลิงก์ WHO/CDC ใช้สำหรับข้อมูลความรู้พื้นฐาน
 
 ## เริ่มพัฒนา
@@ -40,11 +42,13 @@ npm test
 
 ```bash
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
+CHROMIUM_PATH=/usr/bin/chromium npm run test:navigation
+CHROMIUM_PATH=/usr/bin/chromium npm run test:tablet
 ```
 
 ปรับ `BASE_URL`, `CHROMIUM_PATH` และ `QA_ARTIFACTS` ให้ตรงกับเครื่องได้ ผลภาพและสรุป browser checks เริ่มต้นอยู่ที่ `/tmp/nfte-browser-results` ชุดตรวจครอบคลุม renderer WebGL/software, การโต้ตอบกับลูกโลก, การสูญเสีย context, ประเทศ/ชนิดยุง, หน้าจอมือถือ, SENT SCENT และการรักษา user storage เมื่ออัปเดต service worker
 
-ผลตรวจในเครื่องพัฒนารอบสุดท้าย: production build และ unit tests 48 ข้อผ่าน; browser smoke ผ่าน 11 scenarios ทั้ง WebGL/software พร้อม screenshot และ pixel assertions รายละเอียดอยู่ในรายงานด้านล่าง ส่วน lint ทั้ง repository ยังมีหนี้เดิมใน component/สคริปต์ที่ไม่ได้ใช้งาน และไม่ได้นับเป็นผ่าน ผลเหล่านี้ไม่ได้ยืนยันว่าได้ deploy ไป Vercel แล้ว
+Production build, TypeScript, unit tests 58 ข้อ, browser smoke 11 สถานการณ์ และการทดสอบบิน/ซูม/แท็บเล็ตผ่าน หลักฐานอยู่ใน [รายงานการตรวจ navigation](docs/navigation-audit.md) รวมคำสั่งทดสอบ ความถูกต้องของข้อมูล และข้อจำกัด ส่วน lint ทั้ง repository ยังมีหนี้เดิมใน source/สคริปต์ และไม่ได้นับเป็นผ่าน
 
 ## โครงสร้างและข้อมูลผู้ใช้
 

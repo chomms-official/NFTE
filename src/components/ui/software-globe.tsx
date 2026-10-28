@@ -5,6 +5,7 @@ import { geoGraticule10, geoPath } from "d3-geo";
 import type { Feature, Geometry } from "geojson";
 import { countryName, type CountryFeature } from "@/lib/simulator";
 import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe } from "@/lib/software-globe-projection";
+import { interpolateFlightPosition, type GlobeFlight } from "@/lib/globe-navigation";
 
 export type SoftwareGlobeProps = {
   countries: CountryFeature[];
@@ -13,8 +14,14 @@ export type SoftwareGlobeProps = {
   onCountrySelect: (feature: CountryFeature) => void;
   autoRotate: boolean;
   onInteraction?: () => void;
+  onReset?: () => void;
   onReady?: (ready: boolean) => void;
-  focus?: { lat: number; lng: number };
+  focus?: { lat: number; lng: number; zoom?: number };
+  flight?: GlobeFlight | null;
+  insets?: { left: number; right: number; top: number; bottom: number };
+  onViewChange?: (view: { lat: number; lng: number; zoom: number }) => void;
+  onFlightComplete?: (id: number) => void;
+  showControls?: boolean;
   className?: string;
 };
 
@@ -40,7 +47,13 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
     const projection = createGlobeProjection();
     const path = geoPath(projection, ctx);
     const graticule = geoGraticule10();
-    let width = 0, height = 0, radius = 0, zoom = 1;
+    let width = 0, height = 0, radius = 0, zoom = config.current.focus?.zoom ?? 1;
+    let centerX = 0, centerY = 0;
+    let cancelledFlightId: number | undefined, completedFlightId: number | undefined;
+    let flightStartZoom = zoom;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch: { distance: number; zoom: number } | null = null;
+    const clampZoom = (value: number) => Math.max(0.65, Math.min(80, value));
     let rotation: [number, number, number] = config.current.focus
       ? [-config.current.focus.lng, -config.current.focus.lat, 0] : [-100, -15, 0];
     let hovered: CountryFeature | undefined;
@@ -53,9 +66,25 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       if (!geometry) { geometry = asGeoFeature(feature); geometries.set(feature, geometry); }
       return geometry;
     };
-    const setRotation = () => projection.rotate(rotation).scale(radius * zoom).translate([width / 2, height / 2]);
+    const layout = () => {
+      const insets = config.current.insets ?? { left: 0, right: 0, top: 0, bottom: 0 };
+      const left = Math.max(0, insets.left), top = Math.max(0, insets.top);
+      const availableWidth = Math.max(80, width - left - Math.max(0, insets.right));
+      const availableHeight = Math.max(80, height - top - Math.max(0, insets.bottom));
+      centerX = left + availableWidth / 2; centerY = top + availableHeight / 2;
+      radius = Math.max(1, Math.min(availableWidth * 0.43, availableHeight * 0.35));
+    };
+    const setRotation = () => {
+      layout(); projection.rotate(rotation).scale(radius * zoom).translate([centerX, centerY]);
+      canvas.dataset.zoom = zoom.toFixed(3);
+      canvas.dataset.latitude = (-rotation[1]).toFixed(4);
+      canvas.dataset.longitude = (-rotation[0]).toFixed(4);
+      config.current.onViewChange?.({ lat: -rotation[1], lng: -rotation[0], zoom });
+    };
     const pauseForInput = () => {
       interacting = true;
+      if (config.current.flight) cancelledFlightId = config.current.flight.id;
+      delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false";
       config.current.onInteraction?.();
     };
     const pick = (x: number, y: number) => countryAtGlobePoint(projection, config.current.countries, [x, y], geometryFor);
@@ -66,8 +95,9 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
     const draw = () => {
       if (!width || !height) return;
       setRotation();
-      const cx = width / 2, cy = height / 2, r = radius * zoom;
-      const sky = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, Math.max(width, height));
+      const cx = centerX, cy = centerY, r = radius * zoom;
+      canvas.dataset.centerX = cx.toFixed(2); canvas.dataset.centerY = cy.toFixed(2);
+      const sky = ctx.createRadialGradient(cx, cy, Math.min(r * 0.5, Math.max(width, height) * 0.35), cx, cy, Math.max(width, height));
       sky.addColorStop(0, "#111a26"); sky.addColorStop(0.7, "#05080e"); sky.addColorStop(1, "#020306");
       ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
       // Fixed stars, deterministic across renders and without a network dependency.
@@ -115,6 +145,44 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
       }
+      const flight = config.current.flight;
+      if (flight && flight.id !== cancelledFlightId && flight.id !== completedFlightId) {
+        const progress = Math.max(0, Math.min(1, (performance.now() - flight.startedAt) / Math.max(1, flight.duration)));
+        canvas.dataset.flightId = String(flight.id); canvas.dataset.flightProgress = progress.toFixed(4);
+        const route = Array.from({ length: 35 }, (_, i) => {
+          const point = interpolateFlightPosition(flight.from, flight.to, Math.max(0, progress - 0.22) + Math.min(progress, 0.22) * i / 34);
+          return [point.lng, point.lat];
+        });
+        ctx.beginPath(); path({ type: "LineString", coordinates: route });
+        ctx.strokeStyle = "rgba(240,246,255,0.72)"; ctx.lineWidth = 2.5;
+        ctx.shadowColor = "#8bcbff"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+        const position = interpolateFlightPosition(flight.from, flight.to, progress);
+        const future = interpolateFlightPosition(flight.from, flight.to, Math.min(1, progress + 0.003));
+        const past = interpolateFlightPosition(flight.from, flight.to, Math.max(0, progress - 0.003));
+        const projected = projection([position.lng, position.lat]);
+        const ahead = projection([future.lng, future.lat]);
+        const behind = projection([past.lng, past.lat]);
+        const planeVisible = Boolean(projected && ahead && behind && isVisibleOnGlobe(projection, [position.lng, position.lat]));
+        canvas.dataset.flightVisible = String(planeVisible);
+        if (projected && ahead && behind && planeVisible) {
+          const angle = Math.atan2(ahead[1] - behind[1], ahead[0] - behind[0]) + Math.PI / 2;
+          const lift = Math.sin(progress * Math.PI) * 14;
+          canvas.dataset.flightX = projected[0].toFixed(2); canvas.dataset.flightY = (projected[1] - lift).toFixed(2);
+          ctx.save(); ctx.translate(projected[0], projected[1] - lift); ctx.rotate(angle);
+          ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+          // White fuselage, wide wings, tail stabilisers and a red nose, matching the WebGL aircraft.
+          ctx.fillStyle = "#f5f7fa"; ctx.strokeStyle = "#24364e"; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, -20); ctx.lineTo(4, -9); ctx.lineTo(5, -2); ctx.lineTo(23, 7);
+          ctx.lineTo(23, 11); ctx.lineTo(5, 6); ctx.lineTo(4, 16); ctx.lineTo(11, 21);
+          ctx.lineTo(11, 24); ctx.lineTo(0, 20); ctx.lineTo(-11, 24); ctx.lineTo(-11, 21);
+          ctx.lineTo(-4, 16); ctx.lineTo(-5, 6); ctx.lineTo(-23, 11); ctx.lineTo(-23, 7);
+          ctx.lineTo(-5, -2); ctx.lineTo(-4, -9); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.fillStyle = "#ef3434";
+          ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(3.6, -10); ctx.lineTo(-3.6, -10); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#244361"; ctx.fillRect(-2, -8, 4, 4); ctx.restore();
+        }
+      }
       ctx.restore();
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(123,190,255,0.38)"; ctx.lineWidth = 1; ctx.stroke();
@@ -125,7 +193,6 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       const dpr = Math.min(devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(width * dpr)); canvas.height = Math.max(1, Math.round(height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      radius = Math.min(width * (width < 640 ? 0.43 : 0.36), height * 0.35);
       draw();
       if (width && height && !announcedReady) {
         announcedReady = true; canvas.dataset.ready = "true"; config.current.onReady?.(true);
@@ -135,19 +202,31 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       pauseForInput();
       rotation = [(rotation[0] + x) % 360, Math.max(-85, Math.min(85, rotation[1] + y)), 0]; draw();
     };
-    const changeZoom = (factor: number) => { pauseForInput(); zoom = Math.max(0.65, Math.min(2.2, zoom * factor)); draw(); };
+    const changeZoom = (factor: number) => { pauseForInput(); zoom = clampZoom(zoom * factor); draw(); };
+    const pointerDistance = () => {
+      const points = [...pointers.values()];
+      return points.length >= 2 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
+    };
     const onDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       pauseForInput();
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size > 1) {
+        pinch = { distance: Math.max(1, pointerDistance()), zoom };
+        if (drag) drag.moved = true;
+      } else drag = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
       canvas.setPointerCapture(event.pointerId); canvas.style.cursor = "grabbing";
     };
     const onMove = (event: PointerEvent) => {
+      if (pointers.has(event.pointerId)) pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pinch && pointers.size >= 2) {
+        zoom = clampZoom(pinch.zoom * pointerDistance() / pinch.distance); draw(); return;
+      }
       if (drag && drag.id === event.pointerId) {
         if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) drag.moved = true;
         const sensitivity = 90 / Math.max(80, radius * zoom);
         rotation = [(rotation[0] + (event.clientX - drag.x) * sensitivity) % 360,
-          Math.max(-85, Math.min(85, rotation[1] - (event.clientY - drag.y) * sensitivity)), 0];
+          Math.max(-89.5, Math.min(89.5, rotation[1] - (event.clientY - drag.y) * sensitivity)), 0];
         drag.x = event.clientX; drag.y = event.clientY;
         hovered = undefined; setHoveredName(""); draw(); return;
       }
@@ -157,16 +236,24 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       canvas.style.cursor = next ? "pointer" : "grab";
     };
     const onUp = (event: PointerEvent) => {
-      if (!drag || drag.id !== event.pointerId) return;
-      const moved = drag.moved; drag = null;
+      pointers.delete(event.pointerId);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      canvas.style.cursor = "grab";
+      if (pinch) {
+        pinch = null;
+        const remaining = [...pointers.entries()][0];
+        drag = remaining ? { id: remaining[0], x: remaining[1].x, y: remaining[1].y, startX: remaining[1].x, startY: remaining[1].y, moved: true } : null;
+        return;
+      }
+      if (!drag || drag.id !== event.pointerId) return;
+      const moved = drag.moved; drag = null; canvas.style.cursor = "grab";
       if (!moved) {
         const point = pointFromEvent(event); const country = pick(point[0], point[1]);
         if (country) config.current.onCountrySelect(country);
       }
     };
-    const onCancel = () => { drag = null; canvas.style.cursor = "grab"; };
+    const onCancel = (event: PointerEvent) => {
+      pointers.delete(event.pointerId); pinch = null; drag = null; canvas.style.cursor = "grab";
+    };
     const onLeave = () => { if (!drag) { hovered = undefined; setHoveredName(""); draw(); } };
     const onWheel = (event: WheelEvent) => { if (event.ctrlKey || event.metaKey) return; event.preventDefault(); changeZoom(Math.exp(-Math.max(-200, Math.min(200, event.deltaY)) * 0.0015)); };
     const onKey = (event: KeyboardEvent) => {
@@ -180,10 +267,14 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       if (event.key === "+" || event.key === "=") changeZoom(1.15);
       if (event.key === "-") changeZoom(1 / 1.15);
       if (event.key === "Enter" || event.key === " ") {
-        const country = pick(width / 2, height / 2); if (country) config.current.onCountrySelect(country);
+        const country = pick(centerX, centerY); if (country) config.current.onCountrySelect(country);
       }
     };
-    const shouldAnimate = () => visible && config.current.autoRotate && !interacting && !reducedMotion.matches;
+    const activeFlight = () => {
+      const flight = config.current.flight;
+      return flight && flight.id !== cancelledFlightId && flight.id !== completedFlightId ? flight : undefined;
+    };
+    const shouldAnimate = () => visible && Boolean(activeFlight() || (config.current.autoRotate && !interacting && !reducedMotion.matches));
     const kick = () => { if (!frame && shouldAnimate()) frame = requestAnimationFrame(tick); };
     const tick = (time: number) => {
       frame = 0;
@@ -192,7 +283,22 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       // Software rendering is capped around 30fps to avoid saturating mobile CPUs.
       if (!lastTime || elapsed >= 32) {
         const delta = Math.min(elapsed, 80);
-        rotation[0] = (rotation[0] + delta * 0.002) % 360; draw(); lastTime = time;
+        const flight = activeFlight();
+        if (flight) {
+          const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
+          const position = interpolateFlightPosition(flight.from, flight.to, t);
+          rotation = [-position.lng, -position.lat, 0];
+          const smooth = (value: number) => value * value * (3 - 2 * value);
+          const cruise = Math.min(1.2, flightStartZoom);
+          zoom = t < 0.5 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t * 2)
+            : cruise + (clampZoom(flight.zoom) - cruise) * smooth((t - 0.5) * 2);
+          draw();
+          if (t >= 1) {
+            completedFlightId = flight.id; delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false";
+            config.current.onFlightComplete?.(flight.id);
+          }
+        } else { rotation[0] = (rotation[0] + delta * 0.002) % 360; draw(); }
+        lastTime = time;
       }
       kick();
     };
@@ -202,17 +308,22 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       kick();
     };
     const onMotion = () => {
-      if (reducedMotion.matches && frame) { cancelAnimationFrame(frame); frame = 0; }
+      if (reducedMotion.matches && frame && !activeFlight()) { cancelAnimationFrame(frame); frame = 0; }
       lastTime = 0; kick();
     };
     engine.current = { draw, rotate, zoom: changeZoom, reset: () => {
-      pauseForInput(); rotation = [-100, -15, 0]; zoom = 1; hovered = undefined; setHoveredName(""); draw();
+      pauseForInput(); rotation = [-100, -15, 0]; zoom = 1; hovered = undefined; setHoveredName(""); config.current.onReset?.(); draw();
     }, update: previous => {
       const next = config.current;
       if (next.autoRotate && !previous.autoRotate) interacting = false;
-      if (next.focus && (next.focus.lat !== previous.focus?.lat || next.focus.lng !== previous.focus?.lng)) {
-        rotation = [-next.focus.lng, -next.focus.lat, 0];
+      if (next.flight && next.flight.id !== previous.flight?.id) {
+        flightStartZoom = zoom; cancelledFlightId = undefined; completedFlightId = undefined;
       }
+      if (!activeFlight() && next.focus && (next.focus.lat !== previous.focus?.lat || next.focus.lng !== previous.focus?.lng || next.focus.zoom !== previous.focus?.zoom)) {
+        rotation = [-next.focus.lng, -next.focus.lat, 0];
+        if (next.focus.zoom !== undefined) zoom = clampZoom(next.focus.zoom);
+      }
+      if (!activeFlight()) { delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false"; }
       draw(); kick();
     } };
     const observer = new ResizeObserver(resize); observer.observe(canvas);
@@ -235,16 +346,16 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
   return (
     <div className={`relative w-full h-full ${props.className || ""}`} data-renderer="software-globe">
       <canvas ref={canvasRef} data-testid="software-globe" data-renderer="software-globe" className="w-full h-full block outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-inset"
-        style={{ touchAction: "pinch-zoom", cursor: "grab" }} tabIndex={0}
+        style={{ touchAction: "none", cursor: "grab" }} tabIndex={0}
         role="application" aria-label="Interactive mosquito risk globe. Drag or use arrow keys to rotate, plus and minus to zoom, Enter to select the centre country." />
       <div className="absolute left-1/2 -translate-x-1/2 top-[72%] pointer-events-none text-center text-xs text-zinc-200 drop-shadow-md" aria-live="polite">
         {hoveredName || "Drag to rotate · Click a country"}
       </div>
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2" aria-label="Globe view controls">
+      {props.showControls !== false && <div className="absolute left-6 -translate-y-1/2 flex flex-col gap-2" style={{ top: `calc(50% + ${((props.insets?.top ?? 0) - (props.insets?.bottom ?? 0)) / 2}px)` }} aria-label="Globe view controls">
         <button type="button" aria-label="Zoom in" onClick={() => engine.current?.zoom(1.2)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">+</button>
         <button type="button" aria-label="Zoom out" onClick={() => engine.current?.zoom(1 / 1.2)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">−</button>
         <button type="button" aria-label="Reset globe view" onClick={() => engine.current?.reset()} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-lg">↺</button>
-      </div>
+      </div>}
     </div>
   );
 }

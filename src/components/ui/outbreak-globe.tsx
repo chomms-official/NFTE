@@ -7,7 +7,9 @@ import ContributionSkyline, { generateContributions, ContributionDay } from "./c
 import * as THREE from "three";
 import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
-import { countryCenter, countryRisk, simulationSeed, scaleSimulatedHistory } from "@/lib/simulator";
+import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
+
+import { countryFraming, interpolateFlightPosition, type GlobeFlight } from "@/lib/globe-navigation";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -314,7 +316,12 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
-  const prevCoords = useRef<{lat: number, lng: number} | null>(null);
+  const [flight, setFlight] = useState<(GlobeFlight & { countryName: string }) | null>(null);
+  const flightRef = useRef<GlobeFlight | null>(null);
+  const flightIdRef = useRef(0);
+  const destinationRef = useRef<CountryFeature | null>(null);
+  const softwareView = useRef({ lat: 15, lng: 100, zoom: 1 });
+  const mapContainer = useRef<HTMLDivElement>(null);
   const [globeReady, setGlobeReady] = useState(false);
   const [softwareReady, setSoftwareReady] = useState(false);
   const rendererReady = globeReady || softwareReady;
@@ -323,202 +330,126 @@ export default function OutbreakGlobe() {
   const [simulationDate] = useState(() => Date.now());
   const [autoTourEnabled, setAutoTourEnabled] = useState(true);
   const autoTourEnabledRef = useRef(autoTourEnabled);
-  const attachGlobe = useMemo(() => ({
-    get current() { return globeEl.current; },
-    set current(instance: any) {
-      globeEl.current = instance;
-      if (!instance) setGlobeReady(false);
-    },
-  }), []);
   const airplaneMeshRef = useRef<THREE.Group | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const flightTimerRef = useRef<any>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
 
   const cancelFlight = useCallback(() => {
-    if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    flightTimerRef.current = null;
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = null;
-    
-    if (globeEl.current) {
-      const scene = globeEl.current.scene();
-      if (airplaneMeshRef.current) {
-        scene.remove(airplaneMeshRef.current);
-      }
-      if (trailLineRef.current) scene.remove(trailLineRef.current);
-    }
+    flightRef.current = null;
+    destinationRef.current = null;
+    setFlight(null);
+    if (mapContainer.current) mapContainer.current.dataset.flightVisible = "false";
+    airplaneMeshRef.current?.removeFromParent();
     if (trailLineRef.current) {
+      trailLineRef.current.removeFromParent();
       trailLineRef.current.geometry.dispose();
       (trailLineRef.current.material as THREE.Material).dispose();
       trailLineRef.current = null;
     }
   }, []);
 
-  const handleSelectCountry = (countryFeature: any, isManual = false) => {
+  const attachGlobe = useMemo(() => ({
+    get current() { return globeEl.current; },
+    set current(instance: any) {
+      globeEl.current = instance;
+      if (!instance) { setGlobeReady(false); cancelFlight(); }
+    },
+  }), [cancelFlight]);
+
+  const completeFlight = useCallback((id: number) => {
+    if (flightRef.current?.id !== id) return;
+    const destination = destinationRef.current;
     cancelFlight();
-    
-    // Explicitly turn off autopilot if user MANUALLY selects a country
-    if (isManual && autoTourEnabled) {
-      setAutoTourEnabled(false);
-    }
-    
-    const { lat: destLat, lng: destLng } = countryCenter(countryFeature);
-    
-    // Get current view for flight start
-    let startLat = 0;
-    let startLng = 0;
-    
-    if (prevCoords.current) {
-      startLat = prevCoords.current.lat;
-      startLng = prevCoords.current.lng;
-    } else if (globeEl.current) {
-      const pov = globeEl.current.pointOfView();
-      startLat = pov.lat;
-      startLng = pov.lng;
-    }
+    setActiveCountry(destination);
+  }, [cancelFlight]);
 
-    // Calculate shortest path for animation to make flights look realistic and fluid
-    let endLng = destLng;
-    const lngDiffRaw = endLng - startLng;
-    if (lngDiffRaw > 180) {
-      endLng -= 360;
-    } else if (lngDiffRaw < -180) {
-      endLng += 360;
-    }
-    
-    const endLat = destLat;
+  const panelWidth = windowWidth >= 768 ? Math.min(windowWidth * 0.48, 672) : windowWidth;
+  const panelHeight = windowWidth >= 768 ? windowHeight : Math.round(windowHeight * 0.5);
+  const mapWidth = activeCountry && windowWidth >= 768 ? windowWidth - panelWidth : windowWidth;
+  const mapHeight = activeCountry && windowWidth < 768 ? windowHeight - panelHeight : windowHeight;
+  const compactControls = !!activeCountry && windowWidth >= 768 && mapWidth < 600;
 
-    // Details remain usable even when this browser cannot render a globe.
-    if (!globeEl.current || !globeReady) {
-      const showCountry = () => {
-        setActiveCountry(countryFeature);
-        prevCoords.current = { lat: destLat, lng: destLng };
-        flightTimerRef.current = null;
-      };
-      if (isManual) showCountry();
-      else {
-        setActiveCountry(null);
-        flightTimerRef.current = setTimeout(showCountry, 3000);
-      }
-      return;
-    }
+  const handleSelectCountry = (countryFeature: any, isManual = false) => {
+    if (!rendererReady) return;
+    cancelFlight();
+    if (isManual) setAutoTourEnabled(false);
+    const selectedWidth = windowWidth >= 768 ? windowWidth - panelWidth : windowWidth;
+    const selectedHeight = windowWidth >= 768 ? windowHeight : windowHeight - panelHeight;
+    const framing = countryFraming(countryFeature, selectedWidth / selectedHeight);
+    const gpu = globeReady ? globeEl.current : null;
+    const current = gpu ? gpu.pointOfView() : softwareView.current;
+    const from = { lat: current.lat, lng: current.lng };
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const nextFlight: GlobeFlight & { countryName: string } = {
+      id: ++flightIdRef.current, countryName: String(countryFeature.properties.ADMIN || countryFeature.properties.NAME),
+      from, to: framing.center, startedAt: performance.now(),
+      duration: reducedMotion ? 900 : 3600, zoom: framing.softwareZoom,
+    };
+    destinationRef.current = countryFeature;
+    flightRef.current = nextFlight;
+    setFlight(nextFlight);
     setActiveCountry(null);
+    if (!gpu) return;
 
-    if (globeEl.current) {
-      globeEl.current.controls().autoRotate = false;
-      const offsetLng = window.innerWidth > 768 ? 25 : 0;
-      const offsetLat = window.innerWidth <= 768 ? -20 : 0; // Shift camera South so country moves North (Up) out of the modal!
-      
-      // Calculate flight duration dynamically so it doesn't look too fast if going around the whole globe
-      const lngDiff = Math.abs(endLng - startLng);
-      const flightDuration = Math.max(3000, (lngDiff / 180) * 4000); 
-      
-      globeEl.current.pointOfView({ lat: endLat + offsetLat, lng: destLng + offsetLng, altitude: 1.5 }, flightDuration);
-      
-      // 3D Airplane Animation
-      const scene = globeEl.current.scene();
-      if (!airplaneMeshRef.current) {
-        airplaneMeshRef.current = createAirplane();
-      }
-      const plane = airplaneMeshRef.current;
-      if (!scene.children.includes(plane)) {
-        scene.add(plane);
-      }
-      
-      // Setup Trail
-      const maxTrailPoints = 30;
-      const trailPositions = new Float32Array(maxTrailPoints * 3);
-      const trailColors = new Float32Array(maxTrailPoints * 3);
-      
-      // Initialize trail at start pos
-      const initStartCoord = globeEl.current.getCoords(startLat, startLng, 0);
+    gpu.controls().autoRotate = false;
+    if (!airplaneMeshRef.current) airplaneMeshRef.current = createAirplane();
+    const plane = airplaneMeshRef.current;
+    plane.name = "mosquito-airplane";
+    gpu.scene().add(plane);
+    const maxTrailPoints = 35;
+    const trailPositions = new Float32Array(maxTrailPoints * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+    const trailMat = new THREE.LineBasicMaterial({ color: 0xddeeff, transparent: true, opacity: 0.8 });
+    const trailLine = new THREE.Line(trailGeo, trailMat);
+    // Positions move around the entire sphere; avoid stale culling bounds.
+    trailLine.frustumCulled = false;
+    gpu.scene().add(trailLine); trailLineRef.current = trailLine;
+    const startAltitude = Math.max(0.015, current.altitude);
+    const cruiseAltitude = Math.max(1.4, Math.min(2.2, startAltitude));
+    const smooth = (value: number) => value * value * (3 - 2 * value);
+    const animateFlight = (time: number) => {
+      if (flightRef.current?.id !== nextFlight.id || !globeEl.current) return;
+      const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
+      const position = interpolateFlightPosition(from, nextFlight.to, t);
+      const lift = 0.015 + Math.sin(t * Math.PI) * 0.2;
+      const currentPos = gpu.getCoords(position.lat, position.lng, lift);
+      const ahead = interpolateFlightPosition(from, nextFlight.to, Math.min(1, t + 0.003));
+      const nextPos = gpu.getCoords(ahead.lat, ahead.lng, lift);
+      plane.position.copy(currentPos);
+      plane.up.copy(currentPos).normalize();
+      plane.lookAt(nextPos.x, nextPos.y, nextPos.z);
+      // Three's lookAt aims local +Z; the model's red nose points along -Z.
+      plane.rotateY(Math.PI);
       for (let i = 0; i < maxTrailPoints; i++) {
-        trailPositions[i * 3] = initStartCoord.x;
-        trailPositions[i * 3 + 1] = initStartCoord.y;
-        trailPositions[i * 3 + 2] = initStartCoord.z;
-        const alpha = 1 - (i / maxTrailPoints);
-        trailColors[i * 3] = alpha;
-        trailColors[i * 3 + 1] = alpha;
-        trailColors[i * 3 + 2] = alpha;
+        const tailT = Math.max(0, t - 0.18 * i / (maxTrailPoints - 1));
+        const tail = interpolateFlightPosition(from, nextFlight.to, tailT);
+        const point = gpu.getCoords(tail.lat, tail.lng, 0.015 + Math.sin(tailT * Math.PI) * 0.2);
+        trailPositions.set([point.x, point.y, point.z], i * 3);
       }
-      
-      const trailGeo = new THREE.BufferGeometry();
-      trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
-      trailGeo.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
-      const trailMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, linewidth: 2 });
-      const trailLine = new THREE.Line(trailGeo, trailMat);
-      scene.add(trailLine);
-      trailLineRef.current = trailLine;
-      
-      const startTime = performance.now();
-      const maxAltitude = 25; // 25 units above the globe surface (globe R=100)
-      
-      const animateFlight = (time: number) => {
-        if (!globeEl.current) return;
-        let t = (time - startTime) / flightDuration;
-        if (t > 1) t = 1;
-        
-        // 1. Linearly interpolate Lat/Lng to FORCE Eastward direction
-        const currentLat = startLat + (endLat - startLat) * t;
-        const currentLng = startLng + (endLng - startLng) * t;
-        
-        // 2. Add parabolic altitude
-        const currentAltitude = Math.sin(t * Math.PI) * maxAltitude;
-        const currentPos = globeEl.current.getCoords(currentLat, currentLng, currentAltitude / 100);
-        
-        // 3. Look at the next point slightly ahead
-        let tNext = t + 0.05;
-        if (tNext > 1) tNext = 1;
-        const nextLat = startLat + (endLat - startLat) * tNext;
-        const nextLng = startLng + (endLng - startLng) * tNext;
-        const nextAltitude = Math.sin(tNext * Math.PI) * maxAltitude;
-        const nextPos = globeEl.current.getCoords(nextLat, nextLng, nextAltitude / 100);
-        
-        plane.position.copy(currentPos);
-        const surfacePos = globeEl.current.getCoords(currentLat, currentLng, 0);
-        plane.up.copy(surfacePos).normalize();
-        plane.lookAt(nextPos.x, nextPos.y, nextPos.z);
-        
-        // 4. Update Trail precisely at the tail
-        const tailOffset = new THREE.Vector3(0, 0, 1.5); // Tail is at local +Z 1.5
-        plane.updateMatrixWorld();
-        plane.localToWorld(tailOffset); // Convert to world coordinates
-        
-        for (let i = maxTrailPoints - 1; i > 0; i--) {
-          trailPositions[i * 3] = trailPositions[(i - 1) * 3];
-          trailPositions[i * 3 + 1] = trailPositions[(i - 1) * 3 + 1];
-          trailPositions[i * 3 + 2] = trailPositions[(i - 1) * 3 + 2];
-        }
-        trailPositions[0] = tailOffset.x;
-        trailPositions[1] = tailOffset.y;
-        trailPositions[2] = tailOffset.z;
-        trailGeo.attributes.position.needsUpdate = true;
-        
-        if (t < 1) {
-          animationFrameRef.current = requestAnimationFrame(animateFlight);
-        } else {
-          // Flight ended
-          scene.remove(plane);
-          scene.remove(trailLine);
-          trailGeo.dispose();
-          trailMat.dispose();
-          trailLineRef.current = null;
-          animationFrameRef.current = null;
-        }
-      };
-      
-      animationFrameRef.current = requestAnimationFrame(animateFlight);
-      
-      // Wait for flight to finish before showing modal
-      flightTimerRef.current = setTimeout(() => {
-        setActiveCountry(countryFeature);
-        prevCoords.current = { lat: destLat, lng: destLng }; // Store for next flight
-        flightTimerRef.current = null;
-      }, flightDuration);
-    }
+      trailGeo.attributes.position.needsUpdate = true;
+      // Follow the plane before descending to a country-sized view.
+      const altitude = t < 0.5 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t * 2)
+        : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.5) * 2);
+      gpu.pointOfView({ ...position, altitude }, 0);
+      const projected = plane.position.clone().project(gpu.camera());
+      if (mapContainer.current) {
+        const bounds = mapContainer.current.getBoundingClientRect();
+        Object.assign(mapContainer.current.dataset, {
+          flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
+          flightVisible: String(Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1 && projected.z < 1),
+          flightX: ((projected.x + 1) / 2 * bounds.width).toFixed(2),
+          flightY: ((1 - projected.y) / 2 * bounds.height).toFixed(2), altitude: altitude.toFixed(4),
+        });
+      }
+      if (t < 1) animationFrameRef.current = requestAnimationFrame(animateFlight);
+      else completeFlight(nextFlight.id);
+    };
+    animationFrameRef.current = requestAnimationFrame(animateFlight);
   };
 
   const selectCountryRef = useRef(handleSelectCountry);
@@ -542,8 +473,8 @@ export default function OutbreakGlobe() {
     if (!autoTourEnabled || !rendererReady || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
       // When user interrupts tour, reset rotation (unless they are interacting with a country)
-      if (!autoTourEnabled && globeEl.current && !activeCountry && !flightTimerRef.current) {
-        globeEl.current.controls().autoRotate = true;
+      if (!autoTourEnabled && globeEl.current && !activeCountry && !flightRef.current) {
+        globeEl.current.controls().autoRotate = false;
       }
       return;
     }
@@ -595,10 +526,6 @@ export default function OutbreakGlobe() {
     };
   }, [autoTourEnabled, geoJsonData, rendererReady]);
 
-  useEffect(() => {
-    if (!globeReady) cancelFlight();
-  }, [globeReady, cancelFlight]);
-
   // Responsive setup
   useEffect(() => {
     setMounted(true);
@@ -648,13 +575,8 @@ export default function OutbreakGlobe() {
         if (!Array.isArray(data.features) || !data.features.length || data.features.some((f: any) =>
           !f?.properties || !f?.geometry || !Array.isArray(f.geometry.coordinates)
         )) throw new Error("Invalid country data");
-        const cleanedFeatures = data.features.map((f: any) => ({
-          ...f,
-          geometry: { ...f.geometry, coordinates: f.geometry.type === "Polygon"
-            ? [f.geometry.coordinates[0]]
-            : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates.map((polygon: any) => [polygon[0]]) : f.geometry.coordinates }
-        }));
-        setGeoJsonData(cleanedFeatures);
+        // Interior rings include sovereign enclaves such as Lesotho. Preserve them.
+        setGeoJsonData(data.features);
         setGeoJsonStatus("ready");
       })
       .catch(() => {
@@ -696,9 +618,9 @@ export default function OutbreakGlobe() {
     return getRiskColor(d.properties.risk);
   }, [activeCountry]);
 
-  const handlePolygonHover = useCallback((d: any) => {
-    if (globeEl.current && !activeCountry && !flightTimerRef.current) {
-      globeEl.current.controls().autoRotate = !d;
+  const handlePolygonHover = useCallback(() => {
+    if (globeEl.current && !activeCountry && !flightRef.current) {
+      globeEl.current.controls().autoRotate = false;
     }
   }, [activeCountry]);
 
@@ -740,21 +662,31 @@ export default function OutbreakGlobe() {
   useEffect(() => {
     if (!globeReady || !globeEl.current) return;
     const controls = globeEl.current.controls();
-    controls.autoRotate = !autoTourEnabledRef.current;
+    controls.autoRotate = false;
     controls.autoRotateSpeed = 0.15;
     controls.enableZoom = true;
+    controls.minDistance = 101.5;
+    controls.maxDistance = 700;
+    controls.zoomSpeed = 0.8;
     const handleControlStart = () => {
       cancelFlight();
       controls.autoRotate = false;
       if (autoTourEnabledRef.current) setAutoTourEnabled(false);
     };
+    const recordView = () => {
+      if (!globeEl.current || !mapContainer.current) return;
+      const view = globeEl.current.pointOfView();
+      Object.assign(mapContainer.current.dataset, { latitude: view.lat.toFixed(4), longitude: view.lng.toFixed(4), altitude: view.altitude.toFixed(4) });
+    };
     controls.addEventListener('start', handleControlStart);
+    controls.addEventListener('change', recordView);
+    recordView();
     if (isInitialView.current && !autoTourEnabledRef.current) {
       const spot = MOSQUITO_DATA[activeMosquito].hotspots[0];
       globeEl.current.pointOfView({ lat: spot.lat, lng: spot.lng, altitude: 2.2 }, 0);
     }
     isInitialView.current = false;
-    return () => controls.removeEventListener('start', handleControlStart);
+    return () => { controls.removeEventListener('start', handleControlStart); controls.removeEventListener('change', recordView); };
     // The controls belong to the renderer; species changes must not interrupt a flight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globeReady, cancelFlight]);
@@ -773,19 +705,30 @@ export default function OutbreakGlobe() {
 
   const softwareFocus = useMemo(() => {
     if (!activeCountry) return undefined;
-    const center = countryCenter(activeCountry);
-    return {
-      lat: Math.max(-85, Math.min(85, center.lat + (windowWidth <= 768 ? -20 : 0))),
-      lng: center.lng + (windowWidth > 768 ? 25 : 0),
-    };
-  }, [activeCountry, windowWidth]);
+    const framing = countryFraming(activeCountry, mapWidth / mapHeight);
+    return { ...framing.center, zoom: framing.softwareZoom };
+  }, [activeCountry, mapWidth, mapHeight]);
+
+  useEffect(() => {
+    if (!activeCountry || !globeReady || !globeEl.current) return;
+    const framing = countryFraming(activeCountry, mapWidth / mapHeight);
+    globeEl.current.pointOfView({ ...framing.center, altitude: framing.webglAltitude }, 0);
+  }, [activeCountry, globeReady, mapWidth, mapHeight]);
+
+  const changeGpuZoom = (factor: number) => {
+    if (!globeEl.current) return;
+    cancelFlight(); setAutoTourEnabled(false);
+    const pov = globeEl.current.pointOfView();
+    globeEl.current.controls().autoRotate = false;
+    globeEl.current.pointOfView({ ...pov, altitude: Math.max(0.015, Math.min(6, pov.altitude * factor)) }, 180);
+  };
 
   if (!mounted) return null;
 
   return (
     <div className="relative w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
-      <div id="globe-container" className="absolute inset-0 cursor-move">
+      <div ref={mapContainer} id="globe-container" className="absolute top-0 left-0 cursor-move" style={{ width: mapWidth, height: mapHeight }}>
         <WebGLBoundary fallback={
           <SoftwareGlobe
             countries={countries}
@@ -795,14 +738,18 @@ export default function OutbreakGlobe() {
             autoRotate={autoTourEnabled && !activeCountry}
             onInteraction={() => { setAutoTourEnabled(false); cancelFlight(); }}
             onReady={setSoftwareReady}
+            onReset={() => setActiveCountry(null)}
             focus={softwareFocus}
+            flight={flight}
+            onFlightComplete={completeFlight}
+            onViewChange={view => { softwareView.current = view; }}
           />
         }>
         <Globe
           ref={attachGlobe}
           onGlobeReady={() => setGlobeReady(true)}
-          width={windowWidth}
-          height={windowHeight}
+          width={mapWidth}
+          height={mapHeight}
           backgroundColor="rgba(0,0,0,0)"
           globeImageUrl="/assets/earth-blue-marble.jpg"
           backgroundImageUrl="/assets/night-sky.png"
@@ -831,16 +778,27 @@ export default function OutbreakGlobe() {
           htmlElement={createHtmlElement}
         />
         </WebGLBoundary>
+        {globeReady && <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2" aria-label="Globe view controls">
+          <button type="button" aria-label="Zoom in" onClick={() => changeGpuZoom(1 / 1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">+</button>
+          <button type="button" aria-label="Zoom out" onClick={() => changeGpuZoom(1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">−</button>
+          <button type="button" aria-label="Reset globe view" onClick={() => {
+            cancelFlight(); setAutoTourEnabled(false); setActiveCountry(null);
+            globeEl.current?.pointOfView({ lat: 15, lng: 100, altitude: 2.2 }, 350);
+          }} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-lg">↺</button>
+        </div>}
       </div>
+      {flight && <div data-testid="globe-flight" role="status" className="absolute top-44 sm:top-56 left-1/2 -translate-x-1/2 text-xs text-blue-100 bg-black/70 px-3 py-2 rounded-lg pointer-events-none z-30">
+        ✈ Flying to {flight.countryName}
+      </div>}
 
       {!activeCountry && <div className="absolute top-32 sm:top-44 left-1/2 -translate-x-1/2 z-40 w-60 max-w-[80vw]">
         <label htmlFor="country-select" className="sr-only">Choose a country</label>
-        <select id="country-select" className="w-full bg-black/80 text-zinc-100 border border-white/20 rounded-lg px-3 py-2 text-xs backdrop-blur-md" value="" disabled={geoJsonStatus !== "ready"}
+        <select id="country-select" className="w-full bg-black/80 text-zinc-100 border border-white/20 rounded-lg px-3 py-2 text-xs backdrop-blur-md" value="" disabled={!rendererReady || geoJsonStatus !== "ready"}
           onChange={event => {
             const country = countries.find(f => (f.properties.ADMIN || f.properties.NAME) === event.target.value);
             if (country) handleSelectCountry(country, true);
           }}>
-          <option value="" disabled>{geoJsonStatus === "loading" ? "Loading countries…" : "Choose a country"}</option>
+          <option value="" disabled>{geoJsonStatus === "loading" ? "Loading countries…" : !rendererReady ? "Preparing globe…" : "Choose a country"}</option>
           {[...countries].sort((a, b) => String(a.properties.ADMIN || a.properties.NAME).localeCompare(String(b.properties.ADMIN || b.properties.NAME))).map(country => (
             <option key={country.properties.ADMIN || country.properties.NAME} value={country.properties.ADMIN || country.properties.NAME}>{country.properties.ADMIN || country.properties.NAME}</option>
           ))}
@@ -852,7 +810,7 @@ export default function OutbreakGlobe() {
       </div>}
 
       {/* TOP CONTROLS: Mosquito Selectors */}
-      <div className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[999] pointer-events-auto w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
+      <div style={{ maxWidth: activeCountry && windowWidth >= 768 ? mapWidth - 32 : undefined }} className={`absolute top-4 sm:top-6 flex items-center justify-center gap-1 sm:gap-3 bg-black/60 p-1 sm:p-2 rounded-2xl border border-white/10 backdrop-blur-xl shadow-2xl z-[999] pointer-events-auto w-max max-w-[95vw] overflow-x-auto overflow-y-hidden no-scrollbar transition-all duration-500 ${
         activeCountry 
           ? "md:left-6 md:translate-x-0 left-1/2 -translate-x-1/2 opacity-100" 
           : "left-1/2 -translate-x-1/2 opacity-100"
@@ -868,16 +826,16 @@ export default function OutbreakGlobe() {
                 setActiveMosquito(key);
                 setAutoTourEnabled(false);
               }}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-sm tracking-wide transition-all duration-300 whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 ${compactControls ? "text-[10px]" : "sm:px-5 sm:py-3 text-[10px] sm:text-sm"} rounded-xl font-bold tracking-wide transition-all duration-300 whitespace-nowrap shrink-0 ${
                 isActive 
                   ? "bg-red-600/90 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] border border-red-500 scale-100 sm:scale-105" 
                   : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 border border-transparent"
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 shrink-0 ${isActive ? "animate-pulse" : ""}`} />
+              <Icon className={`w-3.5 h-3.5 ${compactControls ? "" : "sm:w-5 sm:h-5"} shrink-0 ${isActive ? "animate-pulse" : ""}`} />
               <div className="flex flex-col items-start text-left">
                 <span className="leading-none">{data.name}</span>
-                <span className={`text-[7px] sm:text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
+                <span className={`${compactControls ? "hidden" : ""} text-[7px] sm:text-[9px] font-medium tracking-tighter mt-1 opacity-80 ${isActive ? "text-red-100" : "text-zinc-500"}`}>
                   {data.diseases.split(",")[0]}
                 </span>
               </div>
@@ -925,7 +883,7 @@ export default function OutbreakGlobe() {
       </div>
       
       {/* Overlay UI - Bottom Left Legend */}
-      <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
+      <div hidden={!!activeCountry} className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl pointer-events-none z-10 shadow-2xl">
         <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
           <ActivityIcon className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" /> 
           Simulated Risk Heatmap
@@ -947,7 +905,7 @@ export default function OutbreakGlobe() {
       </div>
 
       {/* Selected Disease Info - Bottom Right (Stacked on mobile) */}
-      <div className="absolute bottom-[140px] left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-xs bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl pointer-events-auto">
+      <div hidden={!!activeCountry} className="absolute bottom-[140px] left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-xs bg-black/70 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 backdrop-blur-xl z-10 shadow-2xl pointer-events-auto">
         <h4 className="text-white font-black text-[10px] sm:text-sm uppercase tracking-widest mb-1 sm:mb-2 border-b border-white/10 pb-1 sm:pb-2">
           {MOSQUITO_DATA[activeMosquito].name} Vectors
         </h4>
@@ -977,16 +935,16 @@ export default function OutbreakGlobe() {
 
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
-        <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-2xl xl:max-w-4xl bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
-          
+        <div data-testid="country-details" role="region" aria-label="Country details" style={{ width: panelWidth, height: panelHeight }} className="absolute bottom-0 right-0 bg-[#050505]/98 border-t md:border-t-0 md:border-l border-white/10 shadow-2xl flex flex-col z-50">
+
           {/* Fixed Header with Close Button */}
-          <div className="flex justify-end p-4 pt-36 md:p-8 shrink-0">
+          <div className="flex justify-end p-2 md:p-5 shrink-0">
             <button 
               aria-label="Close country details"
               onClick={() => {
                 setActiveCountry(null);
                 if (globeEl.current) {
-                  globeEl.current.controls().autoRotate = true;
+                  globeEl.current.controls().autoRotate = false;
                   globeEl.current.controls().autoRotateSpeed = 0.15;
                 }
               }}

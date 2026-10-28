@@ -52,3 +52,18 @@ test('country rings use the correct D3 spherical winding instead of filling the 
     assert.ok(area > 0 && area < Math.PI * 2, `${name(country)} area ${area}`);
   }
 });
+
+test('country holes keep Lesotho distinct from surrounding South Africa on the globe', async () => {
+  const { createGlobeProjection, countryAtGlobePoint, asGeoFeature } = await helpers;
+  const { geoContains } = await import('d3-geo');
+  const southAfrica = countries.find(country => name(country) === 'South Africa');
+  const lesotho = countries.find(country => name(country) === 'Lesotho');
+  const lesothoPoint = [28.2336, -29.61];
+  const southAfricaPoint = [27, -29.61];
+  assert.equal(geoContains(asGeoFeature(lesotho), lesothoPoint), true);
+  assert.equal(geoContains(asGeoFeature(southAfrica), lesothoPoint), false,
+    'South Africa must retain its interior ring instead of painting over Lesotho');
+  const projection = createGlobeProjection([-28.2336, 29.61, 0]).translate([500, 400]).scale(1500);
+  assert.equal(name(countryAtGlobePoint(projection, countries, projection(lesothoPoint))), 'Lesotho');
+  assert.equal(name(countryAtGlobePoint(projection, countries, projection(southAfricaPoint))), 'South Africa');
+});

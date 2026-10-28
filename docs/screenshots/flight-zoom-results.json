@@ -1,0 +1,32 @@
+[
+  {
+    "mode": "software",
+    "aircraftPixels": {
+      "white": 454,
+      "red": 3908
+    },
+    "buttonPixels": 148391,
+    "wheelPixels": 207829,
+    "pinchPixels": 110737,
+    "countryFit": {
+      "belgium": 31.195,
+      "brazil": 2.018
+    },
+    "cancelledFlight": true
+  },
+  {
+    "mode": "webgl",
+    "aircraftPixels": {
+      "white": 37,
+      "red": 1422
+    },
+    "buttonPixels": 304884,
+    "wheelPixels": 179782,
+    "pinchPixels": 130683,
+    "countryFit": {
+      "belgium": 0.0978,
+      "brazil": 1.4246
+    },
+    "cancelledFlight": true
+  }
+]

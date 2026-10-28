@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Russia",
+    "altitude": 5.034,
+    "whitePixels": 16411,
+    "edgePixels": 0
+  },
+  {
+    "name": "Canada",
+    "altitude": 3.8846,
+    "whitePixels": 18017,
+    "edgePixels": 0
+  }
+]

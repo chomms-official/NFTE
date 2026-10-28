@@ -33,6 +33,10 @@ async function ready(page) {
   await stopAutopilot(page);
   await page.waitForFunction(() => document.querySelector('#country-select')?.options.length === 178);
   await globeCanvas(page).waitFor();
+  // A tour may already have zoomed into a country before it is stopped.
+  // Start whole-sphere assertions from an explicit world overview.
+  await page.getByRole('button', { name: 'Reset globe view', exact: true }).click();
+  await page.waitForTimeout(500);
 }
 async function stopAutopilot(page) {
   const control = page.locator('#auto-tour-btn');
@@ -117,6 +121,44 @@ async function selectCountry(page, name) {
 async function closeCountry(page) {
   await page.getByRole('button', { name: 'Close country details' }).click();
 }
+async function assertLegendSelection(page, mode) {
+  await page.getByRole('button', { name: 'Flat heat map', exact: true }).click();
+  const chart = page.getByRole('img', { name: /shown as a heat map/ });
+  const pinned = page.getByRole('button', { name: 'Highlight heaviest days', exact: true });
+  const preview = page.getByRole('button', { name: 'Highlight light days', exact: true });
+  await page.waitForTimeout(300);
+  const initial = await chart.screenshot();
+  await pinned.click();
+  await page.mouse.move(1, 1);
+  assert.equal(await pinned.getAttribute('aria-pressed'), 'true', 'First click must pin the legend filter after hover and focus');
+  await page.waitForTimeout(300);
+  const filtered = await chart.screenshot();
+  await assertSceneChanged(initial, filtered, `${mode}: pinned legend filter changes chart pixels`);
+  await preview.hover();
+  assert.equal(await pinned.getAttribute('aria-pressed'), 'true', 'Previewing another level must preserve the pinned level');
+  assert.equal(await preview.getAttribute('aria-pressed'), 'false', 'Hover previews must not claim to be pinned');
+  await page.waitForTimeout(300);
+  await assertSceneChanged(filtered, await chart.screenshot(), `${mode}: legend hover preview changes chart pixels`);
+  await page.mouse.move(1, 1);
+  await page.waitForTimeout(300);
+  assert.deepEqual((await rawImage(await chart.screenshot())).data, (await rawImage(filtered)).data,
+    'Leaving a hover preview must restore the pinned filter');
+  await pinned.click();
+  await page.mouse.move(1, 1);
+  assert.equal(await pinned.getAttribute('aria-pressed'), 'false', 'Second click must clear the pinned filter');
+  await page.waitForTimeout(300);
+  assert.deepEqual((await rawImage(await chart.screenshot())).data, (await rawImage(initial)).data,
+    'Clearing the pinned filter must restore the complete chart');
+  await pinned.focus();
+  await page.keyboard.press('Space');
+  await page.locator('#auto-tour-btn').focus();
+  assert.equal(await pinned.getAttribute('aria-pressed'), 'true', 'Keyboard selection must persist after focus leaves');
+  await pinned.focus();
+  await page.keyboard.press('Space');
+  await page.locator('#auto-tour-btn').focus();
+  assert.equal(await pinned.getAttribute('aria-pressed'), 'false', 'Keyboard activation must clear an existing selection');
+  await page.getByRole('button', { name: '3D skyline', exact: true }).click();
+}
 async function assertReadableChartUnits(page) {
   const units = page.getByText(/^simulated cases?$/, { exact: true });
   let checked = 0;
@@ -199,6 +241,7 @@ for (const disabled of [true, false]) {
       assert.equal(await page.getByText(/^Risk Level:/).innerText(), risk);
       await page.waitForTimeout(500);
       await assertReadableChartUnits(page);
+      await assertLegendSelection(page, mode);
       await page.screenshot({ path: `${artifacts}/country-${mode}-thailand.png` });
       await closeCountry(page);
       await selectCountry(page, 'Thailand');

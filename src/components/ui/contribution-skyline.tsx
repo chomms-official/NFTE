@@ -400,7 +400,7 @@ function Stat({
           >
             {value}
           </span>
-          <span className="text-sm shrink-0">{unit}</span>
+          <span className="text-sm min-w-0 max-w-full">{unit}</span>
         </div>
         <div className="mt-0.5 text-xs whitespace-normal" style={{ color: MUTED }}>
           {sub}
@@ -483,7 +483,9 @@ export default function ContributionSkyline({
   })
   const [width, setWidth] = React.useState(0)
   const [active, setActive] = React.useState(-1)
-  const [legendLevel, setLegendLevel] = React.useState(-1)
+  const [pinnedLegendLevel, setPinnedLegendLevel] = React.useState(-1)
+  const [previewLegendLevel, setPreviewLegendLevel] = React.useState(-1)
+  const legendLevel = previewLegendLevel >= 0 ? previewLegendLevel : pinnedLegendLevel
   const [announce, setAnnounce] = React.useState("")
 
   const rootRef = React.useRef<HTMLElement>(null)
@@ -504,9 +506,13 @@ export default function ContributionSkyline({
     return (c.count ? nf.format(c.count) + " " + noun(c.count) : "No " + plural) + " on " + dfl.format(dayMs(c.date))
   }
 
-  // Everything the render loop reads, refreshed every render so the loop never closes over stale props.
-  const cfg = React.useRef({ model, duration, heightScale, orbit, palette, legendLevel, onCellClick, target: view === "3d" ? 1 : 0, setActive, setWidth, setTheme, setAnnounce, describe })
-  cfg.current = { model, duration, heightScale, orbit, palette, legendLevel, onCellClick, target: view === "3d" ? 1 : 0, setActive, setWidth, setTheme, setAnnounce, describe }
+  // Publish committed props before the animation loop runs. An interrupted
+  // render must not change the values read by an already-visible canvas.
+  const committedConfig = { model, duration, heightScale, orbit, palette, legendLevel, onCellClick, target: view === "3d" ? 1 : 0, setActive, setWidth, setTheme, setAnnounce, describe }
+  const cfg = React.useRef(committedConfig)
+  React.useLayoutEffect(() => {
+    cfg.current = committedConfig
+  })
 
   React.useEffect(() => {
     const root = rootRef.current
@@ -1133,7 +1139,6 @@ export default function ContributionSkyline({
       engine.current = null
     }
     // The loop reads everything else through cfg; it is built once per mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale])
 
   React.useEffect(() => {
@@ -1331,7 +1336,8 @@ export default function ContributionSkyline({
             }}
           >
             <div className="min-h-0 overflow-hidden">
-              <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-2 pt-4 pb-1 sm:gap-x-4 sm:px-4 md:grid-cols-4">
+              <div data-testid="chart-statistics" className="grid gap-x-2 gap-y-4 px-2 pt-4 pb-1 sm:gap-x-4 sm:px-4"
+                style={{ gridTemplateColumns: `repeat(${width < 240 ? 1 : width < 480 ? 2 : 4}, minmax(0, 1fr))` }}>
                 {statBlocks.map((b) => (
                   <Stat key={b.label} {...b} accent={theme.accent} size={width < 450 ? "1.25rem" : "1.75rem"} align="stack" />
                 ))}
@@ -1358,19 +1364,24 @@ export default function ContributionSkyline({
             <span className="flex-1">{footer}</span>
           )}
           {showLegend && (
-            <div className="flex items-center gap-1.5" onMouseLeave={() => setLegendLevel(-1)}>
+            <div className="flex items-center gap-1.5" onMouseLeave={() => setPreviewLegendLevel(-1)}>
               <span className="mr-0.5">Less</span>
               {theme.swatches.map((c, i) => (
                 <button
                   key={i}
                   type="button"
                   aria-label={"Highlight " + levelNames[i].toLowerCase() + " days"}
-                  aria-pressed={legendLevel === i}
+                  aria-pressed={pinnedLegendLevel === i}
                   title={levelNames[i]}
-                  onMouseEnter={() => setLegendLevel(i)}
-                  onFocus={() => setLegendLevel(i)}
-                  onBlur={() => setLegendLevel(-1)}
-                  onClick={() => setLegendLevel((l) => (l === i ? -1 : i))}
+                  onMouseEnter={() => setPreviewLegendLevel(i)}
+                  onFocus={() => setPreviewLegendLevel(i)}
+                  onBlur={() => setPreviewLegendLevel(-1)}
+                  onClick={() => {
+                    // Hover/focus previews must not toggle the selection off
+                    // before the first click or touch has pinned it.
+                    setPinnedLegendLevel((level) => (level === i ? -1 : i))
+                    setPreviewLegendLevel(-1)
+                  }}
                   className="h-[11px] w-[11px] cursor-pointer rounded-[2px] border-0 p-0 transition-[background-color,transform] duration-500 hover:scale-125 focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:transition-none"
                   style={{
                     background: c,

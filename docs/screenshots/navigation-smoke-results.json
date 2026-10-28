@@ -1,0 +1,122 @@
+{
+  "groups": 2,
+  "passed": [
+    "homepage software: MozzieMap globe, rendered pixels, no product hero, drag and zoom",
+    "homepage software: country pick, species, chart controls, repeatable risk and autopilot",
+    "/simulator software: preserved globe route and same country workflow",
+    "homepage: failed GeoJSON shows retry and recovers without JavaScript exceptions",
+    "mobile homepage: full software globe, country details and no horizontal overflow",
+    "presentation: keyboard, looping, wheel, touch y=0 and reduced motion remain intact",
+    "service worker: activation preserves user storage and offline root still shows a globe",
+    "homepage webgl: MozzieMap globe, rendered pixels, no product hero, drag and zoom",
+    "homepage webgl: country pick, species, chart controls, repeatable risk and autopilot",
+    "homepage: losing an existing GPU context recovers to an interactive software sphere",
+    "/simulator webgl: preserved globe route and same country workflow"
+  ],
+  "renderedPixelEvidence": [
+    {
+      "name": "software spherical silhouette",
+      "inside": 114967,
+      "outside": 0
+    },
+    {
+      "name": "home-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 185959,
+      "colorBins": 174
+    },
+    {
+      "name": "software: drag rotates visible globe",
+      "changedPixels": 182681,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "software: wheel zoom changes visible globe",
+      "changedPixels": 64912,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "software: pinned legend filter changes chart pixels",
+      "changedPixels": 580,
+      "sampledPixels": 40619
+    },
+    {
+      "name": "software: legend hover preview changes chart pixels",
+      "changedPixels": 407,
+      "sampledPixels": 40619
+    },
+    {
+      "name": "simulator-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 185959,
+      "colorBins": 174
+    },
+    {
+      "name": "home-mobile-software-globe",
+      "width": 390,
+      "height": 844,
+      "colorfulPixels": 42803,
+      "colorBins": 161
+    },
+    {
+      "name": "home-offline-software-globe",
+      "width": 390,
+      "height": 844,
+      "colorfulPixels": 42803,
+      "colorBins": 161
+    },
+    {
+      "name": "home-webgl-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 165212,
+      "colorBins": 351
+    },
+    {
+      "name": "webgl: drag rotates visible globe",
+      "changedPixels": 225912,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "webgl: wheel zoom changes visible globe",
+      "changedPixels": 183956,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "webgl: pinned legend filter changes chart pixels",
+      "changedPixels": 564,
+      "sampledPixels": 40619
+    },
+    {
+      "name": "webgl: legend hover preview changes chart pixels",
+      "changedPixels": 402,
+      "sampledPixels": 40619
+    },
+    {
+      "name": "home-context-loss-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 186477,
+      "colorBins": 173
+    },
+    {
+      "name": "context-loss: drag rotates visible globe",
+      "changedPixels": 190385,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "context-loss: wheel zoom changes visible globe",
+      "changedPixels": 95220,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "simulator-webgl-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 164407,
+      "colorBins": 353
+    }
+  ]
+}
