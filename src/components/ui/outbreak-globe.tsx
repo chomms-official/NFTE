@@ -6,6 +6,7 @@ import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-rea
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
 import * as THREE from "three";
 import { WebGLBoundary } from "./webgl-boundary";
+import { SoftwareGlobe } from "./software-globe";
 import { countryCenter, countryRisk, simulationSeed, scaleSimulatedHistory } from "@/lib/simulator";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
@@ -208,7 +209,7 @@ const MOSQUITO_DATA: Record<MosquitoType, {
       "Antarctica": 0.0, "French Southern and Antarctic Lands": 0.0,
     },
     hotspots: [
-      { lat: 9.0820, lng: 8.6753, city: "ABUJA, NIGERIA", weight: 9.9 },
+      { lat: 9.0765, lng: 7.3986, city: "ABUJA, NIGERIA", weight: 9.9 },
       { lat: -4.3224, lng: 15.3070, city: "KINSHASA, DRC", weight: 9.8 },
       { lat: 0.3476, lng: 32.5825, city: "KAMPALA, UGANDA", weight: 9.5 },
       { lat: -25.9692, lng: 32.5732, city: "MAPUTO, MOZAMBIQUE", weight: 9.2 },
@@ -218,7 +219,7 @@ const MOSQUITO_DATA: Record<MosquitoType, {
     name: "CULEX",
     diseases: "Japanese Encephalitis (JE), West Nile Virus",
     icon: WindIcon,
-    sourceName: "CDC West Nile / WHO JE",
+    sourceName: "CDC West Nile Virus",
     sourceUrl: "https://www.cdc.gov/west-nile-virus/index.html",
     riskMap: {
       // Asia (Japanese Encephalitis endemic zone)
@@ -315,6 +316,8 @@ export default function OutbreakGlobe() {
   const [activeCountry, setActiveCountry] = useState<any>(null);
   const prevCoords = useRef<{lat: number, lng: number} | null>(null);
   const [globeReady, setGlobeReady] = useState(false);
+  const [softwareReady, setSoftwareReady] = useState(false);
+  const rendererReady = globeReady || softwareReady;
   const [geoJsonStatus, setGeoJsonStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [simulationDate] = useState(() => Date.now());
@@ -390,8 +393,16 @@ export default function OutbreakGlobe() {
 
     // Details remain usable even when this browser cannot render a globe.
     if (!globeEl.current || !globeReady) {
-      setActiveCountry(countryFeature);
-      prevCoords.current = { lat: destLat, lng: destLng };
+      const showCountry = () => {
+        setActiveCountry(countryFeature);
+        prevCoords.current = { lat: destLat, lng: destLng };
+        flightTimerRef.current = null;
+      };
+      if (isManual) showCountry();
+      else {
+        setActiveCountry(null);
+        flightTimerRef.current = setTimeout(showCountry, 3000);
+      }
       return;
     }
     setActiveCountry(null);
@@ -528,7 +539,7 @@ export default function OutbreakGlobe() {
 
   // 2. Handle Tour Loop
   useEffect(() => {
-    if (!autoTourEnabled || !globeReady || geoJsonData.length === 0) {
+    if (!autoTourEnabled || !rendererReady || geoJsonData.length === 0) {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
       // When user interrupts tour, reset rotation (unless they are interacting with a country)
       if (!autoTourEnabled && globeEl.current && !activeCountry && !flightTimerRef.current) {
@@ -582,7 +593,7 @@ export default function OutbreakGlobe() {
     return () => {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
     };
-  }, [autoTourEnabled, geoJsonData, globeReady]);
+  }, [autoTourEnabled, geoJsonData, rendererReady]);
 
   useEffect(() => {
     if (!globeReady) cancelFlight();
@@ -671,7 +682,7 @@ export default function OutbreakGlobe() {
       maxR: spot.weight * 1.2,
       propagationSpeed: (spot.weight / 10) * 3,
       repeatPeriod: 1000 - (spot.weight * 50),
-      color: "#ff1a1a", // Hotspots are always alarming red
+      color: getRiskColor(spot.weight),
       city: spot.city,
       weight: spot.weight
     }));
@@ -697,7 +708,7 @@ export default function OutbreakGlobe() {
       <div style="color: ${getRiskColor(d.properties.risk)}; font-size: 14px; font-weight: bold; text-transform: uppercase;">
         ${MOSQUITO_DATA[activeMosquito].name} Risk: ${d.properties.risk.toFixed(1)} / 10
       </div>
-      <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view historical outbreak data</div>
+      <div style="color: #a1a1aa; font-size: 12px; margin-top: 6px;">Click to view simulated outbreak history</div>
     </div>
   `, [activeMosquito]);
 
@@ -709,7 +720,7 @@ export default function OutbreakGlobe() {
         <!-- Floating Info Box -->
         <div class="absolute bottom-12 bg-black/90 text-red-100 text-[10px] font-black px-3 py-1.5 rounded-lg border border-red-500/50 backdrop-blur-md whitespace-nowrap uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(220,38,38,0.4)]">
           ${d.city}
-          <span class="block text-red-500/90 text-[8px] mt-0.5">CRITICAL LEVEL: ${d.weight.toFixed(1)}</span>
+          <span class="block text-red-500/90 text-[8px] mt-0.5">SIMULATED SCORE: ${d.weight.toFixed(1)}</span>
         </div>
         <!-- Laser Beam / Extruded Line -->
         <div class="w-[2px] h-12 bg-gradient-to-t from-red-600 via-red-500 to-transparent absolute bottom-2 shadow-[0_0_10px_rgba(220,38,38,0.8)]"></div>
@@ -760,6 +771,15 @@ export default function OutbreakGlobe() {
     ? countryRisk(activeCountry, activeMosquito, MOSQUITO_DATA[activeMosquito].riskMap) : 0,
   [activeCountry, activeMosquito]);
 
+  const softwareFocus = useMemo(() => {
+    if (!activeCountry) return undefined;
+    const center = countryCenter(activeCountry);
+    return {
+      lat: Math.max(-85, Math.min(85, center.lat + (windowWidth <= 768 ? -20 : 0))),
+      lng: center.lng + (windowWidth > 768 ? 25 : 0),
+    };
+  }, [activeCountry, windowWidth]);
+
   if (!mounted) return null;
 
   return (
@@ -767,21 +787,16 @@ export default function OutbreakGlobe() {
       
       <div id="globe-container" className="absolute inset-0 cursor-move">
         <WebGLBoundary fallback={
-          <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6 pb-48 pt-36 text-center">
-            <h1 className="text-xl font-bold">Mosquito outbreak simulator</h1>
-            <p className="max-w-sm text-sm text-zinc-300">The interactive globe is unavailable on this device. Select a country to explore the same simulated data.</p>
-            <label className="text-sm" htmlFor="fallback-country">Country</label>
-            <select id="fallback-country" className="bg-zinc-900 text-white border border-white/30 rounded-lg p-3 max-w-full" value="" disabled={geoJsonStatus !== "ready"}
-              onChange={event => {
-                const country = countries.find((f: any) => (f.properties.ADMIN || f.properties.NAME) === event.target.value);
-                if (country) { setAutoTourEnabled(false); cancelFlight(); setActiveCountry(country); }
-              }}>
-              <option value="" disabled>{geoJsonStatus === "loading" ? "Loading countries…" : "Select a country"}</option>
-              {[...countries].sort((a: any, b: any) => String(a.properties.ADMIN || a.properties.NAME).localeCompare(String(b.properties.ADMIN || b.properties.NAME))).map((f: any) => (
-                <option key={f.properties.ADMIN || f.properties.NAME} value={f.properties.ADMIN || f.properties.NAME}>{f.properties.ADMIN || f.properties.NAME}</option>
-              ))}
-            </select>
-          </div>
+          <SoftwareGlobe
+            countries={countries}
+            getPolygonColor={getPolygonColor}
+            hotspots={ringData}
+            onCountrySelect={country => handleSelectCountry(country, true)}
+            autoRotate={autoTourEnabled && !activeCountry}
+            onInteraction={() => { setAutoTourEnabled(false); cancelFlight(); }}
+            onReady={setSoftwareReady}
+            focus={softwareFocus}
+          />
         }>
         <Globe
           ref={attachGlobe}
@@ -817,6 +832,20 @@ export default function OutbreakGlobe() {
         />
         </WebGLBoundary>
       </div>
+
+      {!activeCountry && <div className="absolute top-32 sm:top-44 left-1/2 -translate-x-1/2 z-40 w-60 max-w-[80vw]">
+        <label htmlFor="country-select" className="sr-only">Choose a country</label>
+        <select id="country-select" className="w-full bg-black/80 text-zinc-100 border border-white/20 rounded-lg px-3 py-2 text-xs backdrop-blur-md" value="" disabled={geoJsonStatus !== "ready"}
+          onChange={event => {
+            const country = countries.find(f => (f.properties.ADMIN || f.properties.NAME) === event.target.value);
+            if (country) handleSelectCountry(country, true);
+          }}>
+          <option value="" disabled>{geoJsonStatus === "loading" ? "Loading countries…" : "Choose a country"}</option>
+          {[...countries].sort((a, b) => String(a.properties.ADMIN || a.properties.NAME).localeCompare(String(b.properties.ADMIN || b.properties.NAME))).map(country => (
+            <option key={country.properties.ADMIN || country.properties.NAME} value={country.properties.ADMIN || country.properties.NAME}>{country.properties.ADMIN || country.properties.NAME}</option>
+          ))}
+        </select>
+      </div>}
 
       {geoJsonStatus === "error" && <div role="alert" className="absolute top-36 z-[1000] max-w-sm p-4 text-center rounded-xl bg-zinc-900 border border-red-500/50">
         Country data could not be loaded. <button className="underline" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry country data</button>
@@ -865,8 +894,8 @@ export default function OutbreakGlobe() {
       }`}>
         <button
           id="auto-tour-btn"
-          disabled={!globeReady || geoJsonStatus !== "ready"}
-          aria-pressed={autoTourEnabled && globeReady}
+          disabled={!rendererReady || geoJsonStatus !== "ready"}
+          aria-pressed={autoTourEnabled && rendererReady}
           onClick={() => {
             if (autoTourEnabled) {
               cancelFlight();
@@ -882,7 +911,7 @@ export default function OutbreakGlobe() {
               : "bg-white/10 text-white border border-white/20 hover:bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
           }`}
         >
-          {autoTourEnabled && globeReady ? (
+          {autoTourEnabled && rendererReady ? (
             <>
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]"></span>
               Autopilot Active
@@ -939,6 +968,13 @@ export default function OutbreakGlobe() {
         </a>
       </div>
 
+      {activeMosquito === "culex" && !activeCountry && <a
+        href="https://www.who.int/news-room/fact-sheets/detail/japanese-encephalitis"
+        target="_blank" rel="noopener noreferrer"
+        className="absolute bottom-[132px] left-4 sm:bottom-2 sm:left-auto sm:right-6 z-20 text-[8px] sm:text-[10px] text-red-300 underline">
+        Background: WHO Japanese encephalitis
+      </a>}
+
       {/* Country Data Modal / Overlay */}
       {activeCountry && (
         <div className="absolute bottom-0 md:top-0 right-0 h-[100dvh] md:h-full w-full md:max-w-[50vw] lg:max-w-2xl xl:max-w-4xl bg-[#050505]/98 md:rounded-none border-t md:border-t-0 md:border-l border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-2xl flex flex-col transform transition-transform animate-in slide-in-from-bottom md:slide-in-from-right duration-500 z-50">
@@ -984,7 +1020,7 @@ export default function OutbreakGlobe() {
               Risk Level: {activeCountryLiveRisk.toFixed(1)} / 10
             </span>
             <span className="text-zinc-400 text-[10px] sm:text-sm font-medium tracking-wide bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/5 whitespace-nowrap">
-              Population: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
+              Population estimate{activeCountry.properties.POP_YEAR ? ` (${activeCountry.properties.POP_YEAR})` : ""}: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
             </span>
           </div>
 
@@ -994,8 +1030,8 @@ export default function OutbreakGlobe() {
             <ContributionSkyline 
               data={countryData}
               palette={activeCountryLiveRisk >= 7.5 ? "danger" : activeCountryLiveRisk >= 4.5 ? "ember" : "halloween"}
-              unit="case"
-              unitPlural="cases"
+              unit="simulated case"
+              unitPlural="simulated cases"
               defaultView="3d"
               orbit={false}
               title={

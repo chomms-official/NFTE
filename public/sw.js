@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mozziemap-cache-v6';
+const CACHE_NAME = 'mozziemap-cache-v7';
 const APP_CACHE_PATTERN = /^mozziemap-cache-v\d+$/;
 const PAGE_PATHS = new Set(['/', '/simulator', '/sent-scent']);
 
@@ -22,10 +22,25 @@ function canCacheResponse(response) {
     !(response.headers.get('Content-Type') || '').includes('text/x-component');
 }
 
+function isGlobeHomepage(request) {
+  const url = new URL(request.url);
+  // Preserve the separate SENT SCENT host's presentation rewrite.
+  return url.pathname === '/' && !url.hostname.toLowerCase().includes('sentscent');
+}
+
+async function matchesCurrentPage(request, response) {
+  if (!isGlobeHomepage(request)) return true;
+  // Older releases served a product presentation at /. Keep those cache entries
+  // intact, but never restore that unrelated screen as the globe homepage.
+  const html = await response.clone().text();
+  return /\bdata-app\s*=\s*["']mozziemap["']/.test(html);
+}
+
 // Cache storage can be unavailable or full. It must never break an online page.
 async function storeResponse(request, response) {
   if (!canCacheResponse(response)) return;
   try {
+    if (!await matchesCurrentPage(request, response)) return;
     const cache = await caches.open(CACHE_NAME);
     await cache.put(request, response);
   } catch {
@@ -42,7 +57,7 @@ async function findCachedResponse(request) {
     for (const name of [CACHE_NAME, ...names.filter((name) => name !== CACHE_NAME)]) {
       const cache = await caches.open(name);
       const response = await cache.match(request);
-      if (response && canCacheResponse(response)) return response;
+      if (response && canCacheResponse(response) && await matchesCurrentPage(request, response)) return response;
     }
   } catch {
     // An unavailable cache is equivalent to an offline cache miss.
@@ -106,6 +121,14 @@ self.addEventListener('fetch', (event) => {
       return { response, cacheCopy: response.ok ? response.clone() : null };
     } catch {
       const cached = await findCachedResponse(request);
+      if (!cached && isGlobeHomepage(request)) {
+        // Legacy releases already cached the globe at /simulator. A redirect
+        // keeps its document/Next.js route consistent while still opening the
+        // globe offline, without resurrecting the old product homepage.
+        const simulatorUrl = new URL('/simulator', request.url);
+        const simulator = await findCachedResponse(new Request(simulatorUrl));
+        if (simulator) return { response: Response.redirect(simulatorUrl, 302), cacheCopy: null };
+      }
       return {
         response: cached || new Response('This content is unavailable offline. Please reconnect and try again.', {
           status: 503,

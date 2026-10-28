@@ -1,14 +1,102 @@
 {
   "groups": 2,
   "passed": [
-    "home no-webgl: hydration, all 11 steps, images and scroll progress",
-    "simulator no-webgl: country details, species, chart controls and revisit",
-    "simulator: failed GeoJSON request shows retry and recovers",
-    "mobile: usable no-WebGL country selection and close control",
-    "presentation: keyboard, forward/back looping, wheel, touch coordinate zero, reduced motion",
-    "service worker: activation preserves user storage and supports offline reload",
-    "home webgl: hydration, all 11 steps, images and scroll progress",
-    "home: loss of an existing WebGL context recovers to product view",
-    "simulator webgl: country details, species, chart controls and revisit"
+    "homepage software: MozzieMap globe, rendered pixels, no product hero, drag and zoom",
+    "homepage software: country pick, species, chart controls, repeatable risk and autopilot",
+    "/simulator software: preserved globe route and same country workflow",
+    "homepage: failed GeoJSON shows retry and recovers without JavaScript exceptions",
+    "mobile homepage: full software globe, country details and no horizontal overflow",
+    "presentation: keyboard, looping, wheel, touch y=0 and reduced motion remain intact",
+    "service worker: activation preserves user storage and offline root still shows a globe",
+    "homepage webgl: MozzieMap globe, rendered pixels, no product hero, drag and zoom",
+    "homepage webgl: country pick, species, chart controls, repeatable risk and autopilot",
+    "homepage: losing an existing GPU context recovers to an interactive software sphere",
+    "/simulator webgl: preserved globe route and same country workflow"
+  ],
+  "renderedPixelEvidence": [
+    {
+      "name": "software spherical silhouette",
+      "inside": 114990,
+      "outside": 0
+    },
+    {
+      "name": "home-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 185982,
+      "colorBins": 174
+    },
+    {
+      "name": "software: drag rotates visible globe",
+      "changedPixels": 160602,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "software: wheel zoom changes visible globe",
+      "changedPixels": 168812,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "simulator-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 185982,
+      "colorBins": 174
+    },
+    {
+      "name": "home-mobile-software-globe",
+      "width": 390,
+      "height": 844,
+      "colorfulPixels": 42803,
+      "colorBins": 161
+    },
+    {
+      "name": "home-offline-software-globe",
+      "width": 390,
+      "height": 844,
+      "colorfulPixels": 42803,
+      "colorBins": 161
+    },
+    {
+      "name": "home-webgl-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 222118,
+      "colorBins": 281
+    },
+    {
+      "name": "webgl: drag rotates visible globe",
+      "changedPixels": 247598,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "webgl: wheel zoom changes visible globe",
+      "changedPixels": 154393,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "home-context-loss-software-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 186500,
+      "colorBins": 173
+    },
+    {
+      "name": "context-loss: drag rotates visible globe",
+      "changedPixels": 138725,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "context-loss: wheel zoom changes visible globe",
+      "changedPixels": 165927,
+      "sampledPixels": 304560
+    },
+    {
+      "name": "simulator-webgl-globe",
+      "width": 1440,
+      "height": 900,
+      "colorfulPixels": 174190,
+      "colorBins": 288
+    }
   ]
 }

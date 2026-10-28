@@ -12,13 +12,13 @@
 
 ## 2. ระบบนี้คืออะไร
 
-นี่เป็นเว็บ Next.js App Router ใช้ React 19 และ TypeScript มีประสบการณ์ผู้ใช้หลักสามส่วนอยู่ใน repository เดียวกัน: หน้าผลิตภัณฑ์ Chomm’s House, งานนำเสนอ SENT SCENT และแบบจำลองแผนที่ความเสี่ยงจากยุง MozzieMap ไม่พบระบบสมาชิก ตะกร้าสินค้า การชำระเงิน API เขียนข้อมูล หรือฐานข้อมูลใน checkout นี้
+นี่เป็นเว็บ Next.js App Router ใช้ React 19 และ TypeScript งานหลักคือ MozzieMap ลูกโลกจำลองความเสี่ยงจากยุง และมีงานนำเสนอ SENT SCENT เป็นอีก route ภายใน repository ยังมี component ผลิตภัณฑ์ Chomm’s House จากงานเดิม แต่ไม่ใช่หน้าแรกตามข้อกำหนดล่าสุด ไม่พบระบบสมาชิก ตะกร้าสินค้า การชำระเงิน API เขียนข้อมูล หรือฐานข้อมูลใน checkout นี้
 
 | Route | จุดเริ่มต้น | Component หลัก | หน้าที่ |
 | --- | --- | --- | --- |
-| `/` | `src/app/page.tsx` | `ChommsHouse3DHero` | เล่าเรื่องผลิตภัณฑ์ผ่านภาพ 3D และการเลื่อน 11 ขั้น |
+| `/` | `src/app/page.tsx` | `OutbreakGlobe`, `ContributionSkyline` | หน้าแรก MozzieMap: ลูกโลก เลือกชนิดยุงและประเทศ ดูความเสี่ยงจำลอง |
 | `/sent-scent` | `src/app/sent-scent/page.tsx` | `InfiniteScrollPresentation`, `SentScentLogo` | งานนำเสนอรูปภาพห้าขั้นแบบวนลูป |
-| `/simulator` | `src/app/simulator/page.tsx` | `OutbreakGlobe`, `ContributionSkyline` | ลูกโลกจำลองความเสี่ยง เลือกประเทศ และดูประวัติจำลอง |
+| `/simulator` | `src/app/simulator/page.tsx` | `OutbreakGlobe`, `ContributionSkyline` | เส้นทางเดิมที่ยังเปิดหน้าลูกโลกเดียวกันได้ |
 
 ทั้งสามหน้าใช้ `src/app/layout.tsx` ร่วมกัน ซึ่งโหลดฟอนต์และ global CSS กำหนด metadata/ไอคอน/PWA manifest และลงทะเบียน service worker ส่วน layout ของ `/sent-scent` เปลี่ยนชื่อหน้าเป็น SENT SCENT
 
@@ -31,27 +31,28 @@
 - Framer Motion จัด transition ของงานนำเสนอ SENT SCENT
 - Tailwind และ CSS ใน `globals.css` กำหนด layout และ responsive styles
 
-## 3. เส้นทางการใช้งานหน้าผลิตภัณฑ์ `/`
+## 3. เส้นทางการใช้งานหน้าแรก `/`
 
-หน้าแรกส่งรายการขั้นตอนที่กำหนดไว้ในโค้ดเข้า `ChommsHouse3DHero` โดยแต่ละรายการมีช่วง progress, สี, เลขลำดับ, icon, ชื่อ, คำอธิบาย และ label
+หน้าแรกต้องเป็น MozzieMap และ render `OutbreakGlobe` โดยตรงเหมือน `/simulator` ไม่ใช่หน้าแสดงสินค้า ไม่มีการ์ดผลิตภัณฑ์ 11 ขั้น ไม่มีภาพซอง/ขวดสเปรย์ และไม่ใช้รูปสินค้าเป็น fallback เมื่อ GPU ใช้งานไม่ได้
 
-1. Overview — แนะนำฟิล์มไล่ยุง
-2. Open — เปิดซอง
-3. Film — นำแผ่นฟิล์มออก
-4. Water — เตรียมน้ำ
-5. Dissolve — ละลายฟิล์ม
-6. Mix — คนให้เข้ากัน
-7. Fill — เทใส่ขวดสเปรย์
-8. Close — ปิดขวด
-9. Shake — เขย่า
-10. Spray — ใช้งานสเปรย์
-11. Lifestyle — การพกพาและใช้งาน
+1. ผู้ใช้เห็นลูกโลกพร้อมผิวประเทศและคะแนนสีของชนิดยุงที่เลือก
+2. หมุน/ลากหรือซูมลูกโลกเพื่อสำรวจพื้นที่ เปลี่ยนชนิดยุงจากแถบควบคุม
+3. คลิกประเทศ หรือใช้ตัวเลือกประเทศที่เข้าถึงได้ด้วยคีย์บอร์ด เพื่อเปิดรายละเอียด
+4. อ่านคะแนนและกราฟจำลอง เปลี่ยนมุมมองกราฟ ปิดรายละเอียดกลับไปสำรวจต่อ
+5. เปิด/ปิด autopilot เพื่อให้ระบบเลือกประเทศตัวอย่างอัตโนมัติ
 
-พื้นที่เลื่อนที่ยาวทำหน้าที่ขับ progress ส่วนฉากอยู่ใน sticky stage เมื่อ progress เปลี่ยน component จะเลือกการ์ดปัจจุบันและเปลี่ยนตำแหน่ง/ขนาด/การหมุน/การมองเห็นของซอง ฟิล์ม แก้ว น้ำ ขวด และพืชในฉาก กราฟิกสร้างจาก geometry และ texture ที่วาดด้วย Canvas ในเครื่อง ไม่พบการโหลดโมเดลของผู้ใช้
+มี renderer สองแบบที่ใช้ชุดประเทศและคะแนนเดียวกัน:
 
-หน้าเดิมมี auto-scroll หลังไม่ใช้งาน 10 วินาที และเลื่อนย้อนเมื่อถึงปลายทาง การแก้ยังคงพฤติกรรมนี้สำหรับการใช้งานปกติ แต่เพิ่มการหยุด/เล่นต่อและเคารพ reduced motion/แท็บที่ซ่อนอยู่ เมื่อ WebGL2 ใช้ไม่ได้หรือ context หาย จะใช้รูปผลิตภัณฑ์ใน repository แทนฉาก พร้อมคงการ์ดและการเลื่อนครบ 11 ขั้น
+- **WebGL:** `react-globe.gl` ใช้ GPU ผ่าน Three.js สำหรับลูกโลกปกติ
+- **Software globe:** `SoftwareGlobe` ใช้ Canvas 2D และการฉายแบบ orthographic วาดโลกทรงกลมพร้อมผืนประเทศ เส้นขอบ เงา และจุด hotspot สามารถลาก หมุน ซูม คลิกประเทศ และใช้ปุ่มควบคุม/คีย์บอร์ดได้ เมื่อ WebGL ถูกปิดหรือ context สูญหายจะเปลี่ยนมาใช้เส้นทางนี้
 
-มี props สำหรับ brand, nav links และ CTA ใน component เดิม แต่ไม่ได้ถูก render จริง ลิงก์ hash ที่หน้าแรกส่งเข้ามาบางรายการไม่มี target ID อยู่ใน DOM ประเด็นนี้ควรแยกจากสาเหตุหน้า crash และไม่ควรเพียงเปิดลิงก์เหล่านั้นโดยไม่สร้าง target ที่ถูกต้อง
+Canvas 2D นี้ยังแสดงลูกโลกทรงกลมและข้อมูลจริงชุดเดียวกับ renderer หลักในเชิงโครงสร้างของแอป ไม่ใช่ภาพ placeholder หรือแผนที่สี่เหลี่ยมแบน และไม่ได้ทำให้ข้อมูลจำลองกลายเป็นข้อมูลเฝ้าระวังจริง การแสดงผลอาจมีลักษณะแสง/พื้นผิวต่างจาก WebGL เพื่อให้ทำงานได้โดยไม่ใช้ GPU
+
+### ขอบเขตของหน้า product ที่เคยอยู่ใน checkout
+
+ก่อนแก้ หน้า `/` ใน checkout เรียก `ChommsHouse3DHero` และเรื่องราวสินค้า 11 ขั้น ตั้งแต่เปิดซอง ละลายฟิล์ม เทใส่ขวด จนถึงใช้งาน ซึ่งไม่ตรงกับความต้องการล่าสุดที่ให้หน้าแรกเป็น MozzieMap จึงแก้ route กลับเป็นลูกโลกแทนการใช้หน้าสินค้าแก้ขัด โค้ดเก่าถูกเก็บไว้ ไม่ได้ลบสินทรัพย์หรือข้อมูลออกจาก repository
+
+บั๊ก nested paragraph, literal text ใน R3F และ material state ใน component สินค้าที่พบระหว่างการตรวจแรกถูกแยกไว้ในตารางด้านล่างเพื่อแสดงร่องรอยวินิจฉัย แต่ไม่ควรสับสนว่า component นั้นยังเป็นหน้าหลักที่ผู้ใช้ต้องใช้งาน
 
 ## 4. เส้นทางการใช้งาน `/sent-scent`
 
@@ -68,7 +69,7 @@
 
 ข้อมูลขั้น/รูปและ progress อยู่ใน React state เท่านั้น การเปลี่ยน state ไม่ได้บันทึกหรือเขียนทับข้อมูลถาวรของผู้ใช้
 
-## 5. เส้นทางการใช้งาน `/simulator`
+## 5. การทำงานของลูกโลกที่ `/` และ `/simulator`
 
 ### 5.1 การเริ่มต้นและทรัพยากร
 
@@ -82,7 +83,7 @@
 
 การเลือกประเทศบนลูกโลกมีการขยับกล้อง เครื่องบิน และเส้นทางบิน จากนั้นแสดงรายละเอียด การเลือกด้วยตนเองหยุด autopilot ส่วน autopilot จะวนประเทศตัวอย่างและสลับชนิดยุง การเริ่มทัวร์ต้องรอ renderer พร้อม ไม่ควรอาศัยเพียงว่ามี DOM หรือดาวน์โหลด JSON แล้ว
 
-เมื่อ WebGL ใช้ไม่ได้ หน้าแสดงตัวเลือกประเทศแบบ HTML แทน จึงยังเลือกชนิดยุง ประเทศ และอ่านรายละเอียด/กราฟจำลองได้ ปุ่ม autopilot ถูกปิดเมื่อไม่สามารถใช้งานลูกโลก
+เมื่อ WebGL ใช้ไม่ได้ หน้าเปลี่ยนเป็น software globe ทรงกลมที่ยังลาก ซูม คลิกประเทศ เลือกชนิดยุง และอ่านรายละเอียด/กราฟจำลองได้ มีตัวเลือกประเทศ HTML เป็นเส้นทางเข้าถึงเพิ่มเติมสำหรับ renderer ทั้งสองแบบ ไม่ใช่การแทนลูกโลกด้วย dropdown อย่างเดียว ปุ่ม autopilot รอให้ renderer ที่ใช้งานจริงและข้อมูลประเทศพร้อม ไม่จำเป็นต้องมี WebGL เสมอไป
 
 ### 5.3 ความหมายของข้อมูล
 
@@ -113,7 +114,7 @@ service worker รุ่นเดิมลบ CacheStorage ทุกชื่อ
 | ปัญหา | ตัวกระตุ้นและผลกระทบ | แนวแก้ในชุดนี้ |
 | --- | --- | --- |
 | DOM ไม่ตรงระหว่าง SSR กับ client | subtitle เป็น `<p>` แต่ hero ห่อด้วย `<p>` อีกครั้ง Browser แก้ nested paragraph ทำให้ hydration mismatch | เปลี่ยน wrapper เป็น element ที่รับเนื้อหาได้โดยไม่สร้าง nested paragraph |
-| WebGL failure ล้มทั้งหน้า | GPU/WebGL ถูกปิด driver/context ล้ม หรือ renderer สร้างไม่สำเร็จ | ตรวจ WebGL2 หลัง mount, error boundary และ context-loss handler; ใช้ fallback HTML/รูปแทน |
+| WebGL failure ล้มทั้งหน้า | GPU/WebGL ถูกปิด driver/context ล้ม หรือ renderer สร้างไม่สำเร็จ | ตรวจ WebGL2 หลัง mount, error boundary และ context-loss handler; เปลี่ยนเป็น software globe ทรงกลมที่โต้ตอบได้ |
 | ข้อความ `\\n` ใน scene tree | literal text ตกค้างระหว่าง mesh/material/Outlines | นำตัวอักษรตกค้างออก ไม่ส่ง text node เข้า R3F |
 | ขึ้นกับ HDR ภายนอก | Environment preset ดาวน์โหลดไฟล์จากภายนอก หากล้มเหลว scene ค้างหรือ error | ลด dependency ภายนอกที่เป็นจุดล้มเหลวของฉาก |
 | ฟอนต์ Google ทำ build ล้มเมื่อ egress ถูกปิด | compile ต้องขอฟอนต์จาก Google Fonts | เก็บฟอนต์ที่ได้รับมาจากแหล่งที่ตรวจสอบได้และใช้ `next/font/local` |
@@ -136,7 +137,7 @@ service worker รุ่นเดิมลบ CacheStorage ทุกชื่อ
 
 ## 8. Component เดิมที่ไม่ได้ถูกใช้งาน
 
-`cinematic-scroll-hero.tsx`, `interactive-product-journey.tsx`, `horizon-hero-section.tsx` และ `scroll-expansion-hero.tsx` ยังอยู่ใน repository แต่ไม่มี route/component ที่ใช้งานจริง import เข้ามาใน graph ปัจจุบัน จึงไม่ได้เป็นสาเหตุ runtime ของสามหน้าที่มีอยู่
+`chomms-house-3d-hero.tsx`, `cinematic-scroll-hero.tsx`, `interactive-product-journey.tsx`, `horizon-hero-section.tsx` และ `scroll-expansion-hero.tsx` ยังอยู่ใน repository แต่ไม่มี route/component ที่ใช้งานจริง import เข้ามาใน graph ปัจจุบัน จึงไม่ได้เป็นสาเหตุ runtime ของสามหน้าที่มีอยู่
 
 พบข้อควรระวังในโค้ดเดิม เช่น random ใน render ของ interactive journey, touch sentinel/listener churn ใน scroll expansion, dummy hash links และการจัดการ lifecycle ของฉาก/animation ใน horizon อย่างไรก็ตามการแก้ component ที่ไม่มีผู้ใช้ใน graph ตอนนี้จะเพิ่มขอบเขตและความเสี่ยงโดยไม่ได้แก้ปัญหาหน้าเว็บที่รายงาน จึงเก็บไว้และระบุเป็นหนี้เทคนิคสำหรับการนำกลับมาใช้ในอนาคต
 
@@ -144,36 +145,40 @@ service worker รุ่นเดิมลบ CacheStorage ทุกชื่อ
 
 ## 9. การทดสอบและข้อจำกัด
 
-ผลตรวจรวมหลังแก้:
+ผลตรวจรวมที่มีหลักฐานแล้ว:
 
 | การตรวจ | ผล |
 | --- | --- |
-| ติดตั้งซ้ำด้วย `npm ci` โดยใช้ lockfile | ผ่าน |
-| `npm run build` รวม TypeScript และ prerender ทุก route | ผ่าน |
-| `npm test` | ผ่าน 26 tests: animation/camera 5, presentation 5, service worker 10, simulator 6 |
-| Chromium production smoke test | ผ่าน 9 scenarios ตามรายการด้านล่าง |
-| Rewrite ตาม Host `sentscent.example` | HTTP 200 และเนื้อหา Earl Grey Garden |
-| ESLint ของ helper, boundary, presentation, service worker และ tests ที่เพิ่ม | ผ่าน |
-| `git diff --check` | ผ่าน |
-| `npm run lint` ทั้ง repository | ยังไม่ผ่าน: 58 errors, 20 warnings; baseline เดิม 68 errors, 22 warnings |
+| ติดตั้งซ้ำด้วย `npm ci` โดยใช้ lockfile | ผ่านตามผลรวมของผู้รวมงาน |
+| Production build | ผ่านจาก source รอบสุดท้ายหลังแก้หน้าแรก ลูกโลก input และข้อความกราฟ |
+| `npm test` | ผ่าน 48 tests ตามผลรวมล่าสุดของผู้รวมงาน |
+| `npm run test:browser` | ผ่าน 11 scenarios บน production build ที่หน้าแรกเป็นลูกโลกแล้ว |
+| ESLint ของ browser harness ที่ปรับ | ผ่าน |
+| `npm run lint` ทั้ง repository | ยังมีปัญหาเดิมใน source/สคริปต์ legacy; ไม่ได้นับเป็นผ่าน |
 
-การตรวจใน Chromium ใช้ production server ที่ build จาก checkout นี้ ทดสอบ desktop 1440×900 และ mobile 390×844 พร้อมภาพหน้าจอ:
+Chromium ใช้ viewport desktop 1440×900 และ mobile 390×844 โดยมีสองโหมดคือ WebGL ผ่าน SwiftShader และปิด WebGL เพื่อทดสอบ software globe:
 
-1. หน้าแรกแบบปิด WebGL: hydration, ภาพสินค้า, การ์ดครบ 11 ขั้นและ progress bar
-2. หน้าแรกแบบเปิด WebGL ด้วย SwiftShader: renderer ทำงานและเลื่อนครบขั้นโดยไม่มี JavaScript/hydration error
-3. สั่งให้ WebGL context ของหน้าแรกหลุดจริง แล้วเปลี่ยนไปภาพสินค้าโดยหน้าที่เหลือยังทำงาน
-4. Simulator แบบปิด WebGL: ประเทศ 177 ตัวเลือก เลือก Thailand เปลี่ยนชนิดยุง สลับกราฟ ปิดและเลือกซ้ำแล้วคะแนนคงเดิม
-5. Simulator แบบเปิด WebGL: รอ renderer พร้อมและเที่ยวบิน autopilot; สั่ง context loss แล้วเลือกประเทศต่อจาก fallback ได้
-6. บังคับ GeoJSON ตอบ 503 แล้วแสดงปุ่ม retry; ยกเลิกข้อผิดพลาดแล้วโหลดกลับได้
-7. Mobile: เลือก Japan, เปิด/ปิดรายละเอียด, ภาพ fallback โหลดครบ, ไม่มี horizontal overflow และปุ่ม autoplay ไม่ทับการ์ด
-8. SENT SCENT: keyboard ไปครบห้าขั้นและวนหน้า/ย้อน, wheel, touch เริ่มพิกัดศูนย์, reduced-motion ไม่เล่นเองหลัง idle
-9. Service worker: สร้าง localStorage และ cache ทดสอบที่ไม่ใช่ของแอป อัปเดต worker ให้ activate จริง ตรวจข้อมูลเดิมยังอยู่ แล้ว reload หน้าแบบ offline ได้ HTTP 200
+1. หน้าแรก software: ลูกโลกทรงกลมจริง ไม่มีภาพ/การ์ดสินค้า ตรวจ pixel/silhouette คลิกประเทศตรงกลาง ลากหมุนและซูม
+2. หน้าแรก software: เลือกประเทศ เปลี่ยนยุง สลับมุมกราฟ เปิดซ้ำแล้วคะแนนคงเดิม และเปิด/หยุด autopilot
+3. `/simulator` software: เส้นทางเดิมยังเป็นลูกโลกและเลือกประเทศได้
+4. บังคับ GeoJSON ตอบ 503 แล้ว retry โหลดกลับได้โดยไม่มี JavaScript exception
+5. Mobile: ลูกโลกทรงกลม เลือก Japan เปิด/ปิดรายละเอียด และไม่มี horizontal overflow
+6. SENT SCENT: keyboard ไปครบห้าขั้นและวนหน้า/ย้อน, wheel, touch เริ่มพิกัดศูนย์ และ reduced-motion ไม่เล่นเองหลัง idle
+7. Service worker: เก็บ draft ทดสอบใน localStorage และ cache ชื่ออื่น อัปเดต worker ตรวจข้อมูลยังอยู่ แล้ว reload หน้าแรก offline ยังแสดงลูกโลกและเลือกประเทศได้
+8. หน้าแรก WebGL: ตรวจ WebGL2 context และภาพที่ render จริง ลากหมุนและซูม
+9. หน้าแรก WebGL: ประเทศ/ชนิดยุง/กราฟ/คะแนนคงเดิม/autopilot
+10. สั่ง GPU context loss จริง แล้วกลับเป็น software globe ทรงกลมที่เลือกประเทศ ลากและซูมได้
+11. `/simulator` WebGL: เส้นทางเดิมและรายละเอียดประเทศทำงาน
 
-การทดสอบใช้ context ของเบราว์เซอร์ทดสอบที่แยกจากผู้ใช้จริง ไม่ได้เปิดหรือล้าง profile ของผู้ใช้ และไม่ใช้ข้อมูลบัญชีจริง
+ตัวอย่างหลักฐานระดับ pixel: software globe มี land pixels 114,990 จุดภายในวงกลมและ 0 จุดนอกวงกลมในภาพที่ตรวจ การลากเปลี่ยนภาพ 176,678 pixels ในกรณี software จึงไม่ได้ใช้เพียงว่ามี `<canvas>` หรือ HTTP 200 เป็นหลักฐาน ตรวจ screenshot จริงของทั้ง desktop/mobile แล้วเห็นลูกโลก ผืนประเทศ เส้นขอบและ heatmap ไม่มีภาพสินค้า
 
-ภาพที่ตรวจแล้วอยู่ใน [docs/screenshots](screenshots/) และคำสั่งทดสอบซ้ำอยู่ใน README กับ `tests/browser-smoke.mjs` ผล log/ภาพเพิ่มเติมของเครื่องทดสอบอยู่ใน `/tmp/nfte-browser-results`.
+ไม่พบ JavaScript exception หรือ console error ที่ไม่คาดหมายใน 11 scenarios; response 503 ใน test retry และ offline network failures เป็นเหตุการณ์ที่ตั้งใจจำลอง ไม่ใช่ผลตรวจผ่านของ endpoint ที่ล้มเหลว การทดสอบใช้ browser profile ชั่วคราว ไม่ได้เปิดหรือล้าง profile ของผู้ใช้จริง
 
-lint ทั้ง repository ยังมีปัญหาในสคริปต์แก้ source รุ่นเก่าซึ่งบางไฟล์ parse ไม่ผ่าน, type `any`, hook patterns และ component legacy ที่ไม่ได้อยู่ใน graph ที่ใช้งาน การแก้ครั้งนี้ไม่ได้ปิดกฎ lint หรือเปลี่ยนสคริปต์เก่าแบบเหมา ผล lint ไม่ได้ถูกนับเป็นผ่าน และไม่ใช้แทนการยืนยัน runtime.
+ทดสอบ browser ทั้ง 11 scenarios ซ้ำบน production build รอบสุดท้ายหลังปรับตำแหน่งประเทศข้าง panel, ไม่ดัก Ctrl/Meta-wheel สำหรับ browser zoom และ wrap หน่วย “simulated cases” แล้วผ่านทั้งหมด Harness ตรวจความกว้างข้อความว่าต้อง fit หรือ wrap และรอ transition 500ms ก่อน screenshot; ตรวจภาพประเทศ Thailand/Japan จริงแล้วข้อความหน่วยไม่ถูกตัด และประเทศที่เลือกบน desktop ยังอยู่ข้าง panel
+
+หลักฐานรอบ browser อยู่ใน `/tmp/nfte-globe-results/results.json` พร้อมภาพใน directory เดียวกัน log อยู่ที่ `/tmp/nfte-qa/globe-browser.log` ตำแหน่ง `/tmp` อาจหายเมื่อเริ่มสภาพแวดล้อมใหม่ ไม่ใช่ URL ของเว็บที่ deploy แล้ว
+
+baseline ก่อนแก้มี lint 68 errors/22 warnings และ build ถูกบล็อก Google Fonts การแก้ครั้งนี้ไม่ปิดกฎ lint หรือเขียนทับสคริปต์แก้ source รุ่นเก่าแบบเหมา ผล lint ล่าสุดทั้ง repository ยังไม่ผ่าน (54 errors/20 warnings) ซึ่งเป็นหนี้เดิมในสคริปต์และ component ที่ไม่ได้ใช้งาน ต้องแยกจากไฟล์ใหม่ที่ตรวจผ่านและ runtime tests
 
 ข้อจำกัดที่ยังต้องระวัง:
 
@@ -181,5 +186,5 @@ lint ทั้ง repository ยังมีปัญหาในสคริป
 - การทดสอบ GPU ใน container อาจใช้ software rendering ซึ่งไม่แทน driver/นโยบายของ Chrome ในเครื่องผู้ใช้ทั้งหมด
 - ไม่ได้อัปเกรดข้อมูลจำลองให้เป็นข้อมูลโรคระบาดจริง
 - ไม่ได้ตรวจ deployment จริงผ่าน HTTP ที่ถูกบล็อก และยังไม่ยืนยันว่าไฟล์แก้ไขเผยแพร่ไป production แล้ว
-- metadata และ manifest เดิมยังใช้ชื่อ MozzieMap เป็นค่ากลาง แม้หน้าผลิตภัณฑ์เป็น Chomm’s House ควรตัดสินใจด้านแบรนด์แยกจากงานแก้ crash
+- metadata และ manifest ใช้ MozzieMap เป็นค่ากลาง และ layout ของ `/sent-scent` เปลี่ยนชื่อหน้าเฉพาะส่วน การเปลี่ยนแบรนด์หรือเนื้อหาสินค้าเป็นงานแยกจากการแก้ลูกโลก
 - การปล่อยขึ้นจริงควรทดสอบ smoke หลัง deployment อีกครั้ง โดยเปิดทั้งแท็บใหม่และแท็บที่มี service worker รุ่นก่อน พร้อมเก็บ deployment ก่อนหน้าไว้สำหรับ rollback

@@ -17,7 +17,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://mozziemap.vercel.app"),
+  metadataBase: new URL("https://chomm-s-house-seven.vercel.app"),
   title: "MozzieMap",
   description: "Global Mosquito Outbreak Simulator",
   manifest: "/manifest.json",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "MozzieMap",
     description: "Global Mosquito Outbreak Simulator",
-    url: "https://mozziemap.vercel.app",
+    url: "https://chomm-s-house-seven.vercel.app",
     siteName: "MozzieMap",
     images: [
       {
@@ -77,7 +77,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    console.log('ServiceWorker registration successful with scope: ', registration?.scope);
                   }, function(err) {
                     console.log('ServiceWorker registration failed: ', err);
                   });

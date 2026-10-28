@@ -5,9 +5,10 @@ import vm from 'node:vm';
 
 const source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
 const origin = 'https://example.test';
-const currentCache = 'mozziemap-cache-v6';
+const currentCache = 'mozziemap-cache-v7';
+const GLOBE_HTML = '<main data-app="mozziemap">online</main>';
 
-function bootWorker({ fetcher = async () => new Response('online'), storageFailure = false } = {}) {
+function bootWorker({ fetcher = async () => new Response(GLOBE_HTML), storageFailure = false, workerOrigin = origin } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const calls = { fetched: [], deleted: [], claimed: 0, skipped: 0 };
@@ -30,7 +31,7 @@ function bootWorker({ fetcher = async () => new Response('online'), storageFailu
     caches,
     fetch: async (request) => { calls.fetched.push(key(request)); return fetcher(request); },
     self: {
-      location: { origin },
+      location: { origin: workerOrigin },
       addEventListener: (type, listener) => listeners.set(type, listener),
       skipWaiting: async () => { calls.skipped++; },
       clients: { claim: async () => { calls.claimed++; } },
@@ -47,7 +48,7 @@ function bootWorker({ fetcher = async () => new Response('online'), storageFailu
     return { response, lifetime, done: () => Promise.all(lifetime) };
   }
   const request = (path, { headers, mode = 'navigate', method = 'GET', cache = 'default' } = {}) => ({
-    url: path.startsWith('https://') ? path : origin + path,
+    url: path.startsWith('https://') ? path : workerOrigin + path,
     headers: new Headers(headers), mode, method, cache,
   });
   return { dispatch, request, stores, calls };
@@ -84,9 +85,9 @@ test('navigation serves fresh HTML and registers the cache write lifetime synchr
   worker.stores.set(currentCache, new Map([[origin + '/', new Response('old HTML')]]));
   const event = worker.dispatch('fetch', worker.request('/'));
   assert.equal(event.lifetime.length, 1);
-  assert.equal(await (await event.response).text(), 'online');
+  assert.equal(await (await event.response).text(), GLOBE_HTML);
   await event.done();
-  assert.equal(await worker.stores.get(currentCache).get(origin + '/').text(), 'online');
+  assert.equal(await worker.stores.get(currentCache).get(origin + '/').text(), GLOBE_HTML);
 });
 
 test('offline navigation retains access to prior app pages without reading unrelated user caches', async () => {
@@ -97,7 +98,9 @@ test('offline navigation retains access to prior app pages without reading unrel
   assert.equal(await (await hit.response).text(), 'old offline simulator');
   await hit.done();
   const miss = worker.dispatch('fetch', worker.request('/'));
-  assert.equal((await miss.response).status, 503);
+  const redirect = await miss.response;
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get('Location'), origin + '/simulator');
   await miss.done();
 });
 
@@ -161,7 +164,7 @@ test('private, no-store and RSC responses never enter the offline cache', async 
 test('storage failure does not prevent online navigation', async () => {
   const worker = bootWorker({ storageFailure: true });
   const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await event.response).text(), 'online');
+  assert.equal(await (await event.response).text(), GLOBE_HTML);
   await event.done();
 });
 
@@ -174,4 +177,80 @@ test('a legacy RSC response cannot be used as an offline HTML document', async (
   assert.equal((await event.response).status, 503);
   await event.done();
   assert.ok(worker.stores.has('mozziemap-cache-v5'));
+});
+
+test('an old product homepage is never restored offline and its cached data remains intact', async () => {
+  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
+  const oldProduct = '<main>Chomm’s House product presentation</main>';
+  worker.stores.set('mozziemap-cache-v6', new Map([[origin + '/', new Response(oldProduct)]]));
+  const event = worker.dispatch('fetch', worker.request('/'));
+  assert.equal((await event.response).status, 503);
+  await event.done();
+  assert.equal(await worker.stores.get('mozziemap-cache-v6').get(origin + '/').text(), oldProduct);
+  assert.deepEqual(worker.calls.deleted, []);
+});
+
+test('a cached globe homepage is restored offline ahead of the legacy product screen', async () => {
+  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
+  worker.stores.set('mozziemap-cache-v6', new Map([[origin + '/', new Response('old product screen')]]));
+  worker.stores.set(currentCache, new Map([[origin + '/', new Response(GLOBE_HTML)]]));
+  const event = worker.dispatch('fetch', worker.request('/'));
+  assert.equal(await (await event.response).text(), GLOBE_HTML);
+  await event.done();
+  assert.equal(worker.stores.size, 2);
+});
+
+test('a legacy cached simulator supplies a safe offline route when the globe homepage is not cached yet', async () => {
+  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
+  worker.stores.set('mozziemap-cache-v6', new Map([
+    [origin + '/', new Response('old product screen')],
+    [origin + '/simulator', new Response('cached mosquito globe')],
+  ]));
+  const rootEvent = worker.dispatch('fetch', worker.request('/'));
+  const redirect = await rootEvent.response;
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get('Location'), origin + '/simulator');
+  await rootEvent.done();
+  const simulatorEvent = worker.dispatch('fetch', worker.request('/simulator'));
+  assert.equal(await (await simulatorEvent.response).text(), 'cached mosquito globe');
+  await simulatorEvent.done();
+  assert.equal(await worker.stores.get('mozziemap-cache-v6').get(origin + '/').text(), 'old product screen');
+});
+
+test('an outdated online root response cannot seed the new globe homepage cache', async () => {
+  const worker = bootWorker({ fetcher: async () => new Response('<main>old product screen</main>') });
+  const event = worker.dispatch('fetch', worker.request('/'));
+  assert.equal((await event.response).status, 200);
+  await event.done();
+  assert.equal(worker.stores.has(currentCache), false);
+});
+
+test('installing v7 stores the marked globe homepage before offline use', async () => {
+  let online = true;
+  const worker = bootWorker({ fetcher: async () => {
+    if (!online) throw new Error('offline');
+    return new Response(GLOBE_HTML);
+  } });
+  await worker.dispatch('install').done();
+  online = false;
+  const event = worker.dispatch('fetch', worker.request('/'));
+  assert.equal(await (await event.response).text(), GLOBE_HTML);
+  await event.done();
+});
+
+test('the separate SENT SCENT host keeps its intended offline presentation at root', async () => {
+  const presentationOrigin = 'https://sentscent.example.test';
+  const presentation = '<main>Earl Grey Garden</main>';
+  let online = true;
+  const worker = bootWorker({ workerOrigin: presentationOrigin, fetcher: async () => {
+    if (!online) throw new Error('offline');
+    return new Response(presentation);
+  } });
+  const firstVisit = worker.dispatch('fetch', worker.request('/'));
+  assert.equal(await (await firstVisit.response).text(), presentation);
+  await firstVisit.done();
+  online = false;
+  const offlineVisit = worker.dispatch('fetch', worker.request('/'));
+  assert.equal(await (await offlineVisit.response).text(), presentation);
+  await offlineVisit.done();
 });
