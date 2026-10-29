@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import dynamic from "next/dynamic";
 import { XIcon, ActivityIcon, DropletsIcon, BugIcon, WindIcon } from "lucide-react";
 import ContributionSkyline, { generateContributions, ContributionDay } from "./contribution-skyline";
+import { CountryEvidencePanel } from "./country-evidence";
 import * as THREE from "three";
 import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
@@ -396,7 +397,7 @@ export default function OutbreakGlobe() {
     const trailPositions = new Float32Array(maxTrailPoints * 3);
     const trailGeo = new THREE.BufferGeometry();
     trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-    const trailMat = new THREE.LineBasicMaterial({ color: 0xddeeff, transparent: true, opacity: 0.8 });
+    const trailMat = new THREE.LineBasicMaterial({ color: 0xddeeff, transparent: true, opacity: 0.35 });
     const trailLine = new THREE.Line(trailGeo, trailMat);
     // Positions move around the entire sphere; avoid stale culling bounds.
     trailLine.frustumCulled = false;
@@ -408,6 +409,8 @@ export default function OutbreakGlobe() {
     const direction = new THREE.Vector3(), target = new THREE.Vector3();
     const radialUp = new THREE.Vector3();
     const beacon = plane.getObjectByName("beacon");
+    const attitude = new THREE.Quaternion();
+    let lastFrame = 0;
     const animateFlight = (time: number) => {
       if (flightRef.current?.id !== nextFlight.id || !globeEl.current) return;
       const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
@@ -423,10 +426,14 @@ export default function OutbreakGlobe() {
       direction.subVectors(nextPoint, previousPoint).normalize();
       // Tangent includes the altitude gradient: nose rises on climb and lowers on approach.
       target.copy(plane.position).add(direction);
-      plane.lookAt(target); plane.rotateY(Math.PI); plane.rotateZ(position.bank);
+      plane.lookAt(target); plane.rotateY(Math.PI);
+      // Damped attitude follows the route without an artificial side-to-side roll.
+      if (!lastFrame) attitude.copy(plane.quaternion);
+      else attitude.slerp(plane.quaternion, 1 - Math.exp(-10 * Math.min((time - lastFrame) / 1000, 0.1)));
+      plane.quaternion.copy(attitude); lastFrame = time;
       if (beacon) beacon.visible = (time % 1600) < 110 || (time % 1600 > 230 && time % 1600 < 310);
       for (let i = 0; i < maxTrailPoints; i++) {
-        const tailT = Math.max(0, t - 0.18 * i / (maxTrailPoints - 1));
+        const tailT = Math.max(0, t - 0.10 * i / (maxTrailPoints - 1));
         const tail = flightSample(nextFlight, tailT);
         const point = gpu.getCoords(tail.lat, tail.lng, tail.altitude);
         trailPositions.set([point.x, point.y, point.z], i * 3);
@@ -440,7 +447,7 @@ export default function OutbreakGlobe() {
       const camera = gpu.camera() as THREE.PerspectiveCamera;
       const viewHeight = Math.max(1, mapContainer.current?.clientHeight || windowHeight);
       const span = 2 * camera.position.distanceTo(plane.position) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-      plane.scale.setScalar(span * (windowWidth < 600 ? 54 : 74) / viewHeight / 12.2);
+      plane.scale.setScalar(span * (windowWidth < 600 ? 26 : 32) / viewHeight / 12.2);
       const projected = plane.position.clone().project(gpu.camera());
       if (mapContainer.current) {
         const bounds = mapContainer.current.getBoundingClientRect();
@@ -525,8 +532,8 @@ export default function OutbreakGlobe() {
     tourMosquitoIndexRef.current = 0;
     startTourCycle();
     
-    // Allow up to 6.8s of flight, then time to read the destination.
-    tourIntervalRef.current = setInterval(nextTourStep, 12000);
+    // Allow up to 9.4s of flight, then time to read the destination.
+    tourIntervalRef.current = setInterval(nextTourStep, 15000);
 
     return () => {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
@@ -983,12 +990,11 @@ export default function OutbreakGlobe() {
                 backgroundColor: getRiskColorRGBA(activeCountryLiveRisk, 0.1)
               }}
             >
-              Risk Level: {activeCountryLiveRisk.toFixed(1)} / 10
-            </span>
-            <span className="text-zinc-400 text-[10px] sm:text-sm font-medium tracking-wide bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/5 whitespace-nowrap">
-              Population estimate{activeCountry.properties.POP_YEAR ? ` (${activeCountry.properties.POP_YEAR})` : ""}: {Number(activeCountry.properties.POP_EST || 0).toLocaleString()}
+              Simulated score: {activeCountryLiveRisk.toFixed(1)} / 10
             </span>
           </div>
+
+          <CountryEvidencePanel country={activeCountry} mosquito={activeMosquito} />
 
           <div className="w-full p-3 rounded-[2rem] bg-gradient-to-br from-zinc-800/80 to-zinc-950 shadow-2xl ring-1 ring-white/10 relative overflow-hidden transform-gpu">
             <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: getRiskColor(activeCountryLiveRisk) }}></div>
