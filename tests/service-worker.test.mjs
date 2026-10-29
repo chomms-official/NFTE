@@ -45,6 +45,14 @@ test('storage eviction is detected before enabling the saved demo',async()=>{
  const w=boot();await w.dispatch('install').done();w.stores.get(current).delete(origin+'/_next/static/lazy.js');
  const state=await w.message({type:'SET_DEMO',enabled:true});assert.equal(state.ready,false);assert.ok(state.error);
 });
+test('retry repairs evicted files without needing a new deployment or clearing user data',async()=>{
+ const w=boot();await w.dispatch('install').done();w.stores.get(current).delete(origin+'/_next/static/lazy.js');
+ w.stores.set('unrelated-drafts',new Map([['draft','keep']]));
+ assert.equal((await w.message({type:'STATUS'})).ready,false);
+ const repaired=await w.message({type:'PREPARE'});assert.equal(repaired.ready,true);
+ assert.equal(w.stores.get('unrelated-drafts').get('draft'),'keep');
+ w.setOffline();assert.equal(await(await w.dispatch('fetch',{request:w.req('/_next/static/lazy.js')}).response).text(),'lazy globe code');
+});
 test('demo mode refuses network fallback and survives subsequent status checks',async()=>{
  const w=boot();await w.dispatch('install').done();assert.equal((await w.message({type:'SET_DEMO',enabled:true})).demo,true);
  w.stores.get(current).delete(origin+'/assets/countries.geojson');const before=w.calls.fetch;

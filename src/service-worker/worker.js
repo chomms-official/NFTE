@@ -49,7 +49,12 @@ async function installRelease() {
   await cache.put(urlFor(META),new Response(RELEASE.version));
   // No skipWaiting here: keep the current presentation stable during updates.
 }
-self.addEventListener('install',event=>event.waitUntil(installRelease().catch(async error=>{
+let preparation;
+function prepareRelease() {
+  if(!preparation) preparation=installRelease().finally(()=>{preparation=undefined;});
+  return preparation;
+}
+self.addEventListener('install',event=>event.waitUntil(prepareRelease().catch(async error=>{
   await notify({type:'OFFLINE_ERROR',message:'Download incomplete. Reconnect and retry.'});
   throw error;
 })));
@@ -63,6 +68,16 @@ self.addEventListener('message',event=>{
   event.waitUntil((async()=>{
     try {
       if(event.data?.type==='APPLY_UPDATE') {await self.skipWaiting();reply({ok:true});return;}
+      if(event.data?.type==='PREPARE') {
+        try {
+          await prepareRelease();
+          const status=await readiness();await notify(status);reply(status);
+        } catch {
+          const message='Download incomplete. Reconnect and retry.';
+          await notify({type:'OFFLINE_ERROR',message});reply({ready:false,error:message});
+        }
+        return;
+      }
       if(event.data?.type==='SET_DEMO') {
         const status=await readiness();
         if(event.data.enabled && !status.ready) {reply({...status,error:'Offline files are incomplete.'});return;}

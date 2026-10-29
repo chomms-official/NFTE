@@ -25,6 +25,7 @@ export function OfflineStatus() {
   const applying=useRef(false);
   const refresh=async()=>{
     if(!('serviceWorker' in navigator))return;
+    if(registration.current)setWaiting(!!registration.current.waiting);
     const worker=navigator.serviceWorker.controller;
     if(worker) try {setStatus(await ask(worker,{type:'STATUS'}));} catch { /* Older workers have no status protocol. */ }
   };
@@ -36,7 +37,7 @@ export function OfflineStatus() {
       if(event.data.type==='OFFLINE_STATUS') setStatus(event.data);
       if(event.data.type==='OFFLINE_ERROR') setStatus(previous=>({...previous,error:event.data.message}));
     };
-    const changed=()=>{if(applying.current) location.reload();else void refresh();};
+    const changed=()=>{setWaiting(false);if(applying.current) location.reload();else void refresh();};
     const visibility=()=>{if(document.visibilityState==='visible') void refresh();};
     navigator.serviceWorker.addEventListener('message',message);
     navigator.serviceWorker.addEventListener('controllerchange',changed);
@@ -65,7 +66,13 @@ export function OfflineStatus() {
     setStatus(previous=>({...previous,error:undefined}));
     try {
       if(!registration.current) {location.reload();return;}
-      await registration.current.update();setWaiting(!!registration.current.waiting);await refresh();
+      await registration.current.update();setWaiting(!!registration.current.waiting);
+      const worker=navigator.serviceWorker.controller;
+      if(worker) {
+        const current=await ask(worker,{type:'STATUS'});setStatus(current);
+        // An unchanged worker will not reinstall itself after cache eviction.
+        if(!current.ready)worker.postMessage({type:'PREPARE'});
+      }
     }catch{setStatus(previous=>({...previous,error:'Reconnect to finish downloading.'}));}
   };
   const toggleDemo=async()=>{
@@ -74,7 +81,7 @@ export function OfflineStatus() {
     if(!result.error) location.reload();
   };
   const update=()=>{
-    if(!registration.current?.waiting)return;
+    if(!registration.current?.waiting) {setWaiting(false);void refresh();return;}
     applying.current=true;registration.current.waiting.postMessage({type:'APPLY_UPDATE'});
   };
   const label=!supported?'Offline unavailable':status.demo?'Offline demo mode':!online?(status.ready?'Offline · ready':'Offline · not prepared')
