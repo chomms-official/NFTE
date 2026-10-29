@@ -12,6 +12,35 @@ export type GlobeFlight = {
   zoom: number;
 };
 
+export const smoothFlightStep = (value: number) => {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+};
+
+/** A short visual journey, scaled by distance rather than a real flight schedule. */
+export function flightDuration(from: GlobeCoordinate, to: GlobeCoordinate): number {
+  return 3800 + 3000 * Math.sqrt(geoDistance([from.lng, from.lat], [to.lng, to.lat]) / Math.PI);
+}
+
+/** Shared takeoff/cruise/approach timing for both globe renderers. */
+export function flightSample(flight: Pick<GlobeFlight, "from" | "to">, elapsed: number) {
+  const t = Math.max(0, Math.min(1, elapsed));
+  // Accelerate/decelerate over the first/last 18%, with constant cruise speed.
+  const ramp = 0.18;
+  const integral = (u: number) => u * u * u - 0.5 * u * u * u * u;
+  const progress = t < ramp ? ramp * integral(t / ramp) / (1 - ramp)
+    : t > 1 - ramp ? 1 - ramp * integral((1 - t) / ramp) / (1 - ramp)
+      : (t - ramp / 2) / (1 - ramp);
+  // Short legs need a lower arc; otherwise neighbouring countries produce a
+  // near-vertical climb. Express lift in travelled distance, not clock time.
+  const distance = geoDistance([flight.from.lng, flight.from.lat], [flight.to.lng, flight.to.lat]);
+  const lift = Math.min(0.045, distance * 0.025);
+  const altitude = 0.009 + lift * smoothFlightStep(progress / 0.22) * (1 - smoothFlightStep((progress - 0.74) / 0.26));
+  return { ...interpolateFlightPosition(flight.from, flight.to, progress), progress, altitude,
+    bank: Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI) * 0.09,
+    phase: t < 0.24 ? "Climbing" : t < 0.72 ? "Cruising" : "Descending" };
+}
+
 const radians = Math.PI / 180;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const longitude = (value: number) => ((value + 180) % 360 + 360) % 360 - 180;

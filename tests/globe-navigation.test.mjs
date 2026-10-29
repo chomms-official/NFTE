@@ -144,3 +144,45 @@ test('wide countries fit the WebGL camera beside details on portrait tablets', (
     }
   }
 });
+
+test('flight timing accelerates smoothly, cruises steadily and decelerates into the destination', () => {
+  const route = { from: {lat:15,lng:101}, to: {lat:36,lng:138} };
+  const start = helpers.flightSample(route,0), end = helpers.flightSample(route,1);
+  assert.equal(start.lat,15);assert.equal(start.lng,101);
+  assert.equal(end.lat,36);assert.equal(end.lng,138);
+  assert.equal(start.altitude,0.009);assert.equal(end.altitude,0.009);
+  let previous = start;
+  for(let i=1;i<=1000;i++) {
+    const next=helpers.flightSample(route,i/1000);
+    assert.ok(next.progress>previous.progress);
+    assert.ok(next.altitude>=0.009 && next.altitude<=0.054000001);
+    assert.ok(Math.abs(next.bank)<=0.09);
+    previous=next;
+  }
+  const advance=t=>helpers.flightSample(route,t+0.001).progress-helpers.flightSample(route,t).progress;
+  assert.ok(advance(0)<advance(0.08) && advance(0.08)<advance(0.3));
+  assert.ok(Math.abs(advance(0.3)-advance(0.6))<1e-12);
+  assert.ok(advance(0.99)<advance(0.9));
+  assert.equal(helpers.flightSample(route,0.5).phase,'Cruising');
+  assert.equal(helpers.flightSample(route,0.9).phase,'Descending');
+});
+
+test('short routes climb gently and every route has stable endpoint tangents', () => {
+  for(const route of [
+    {from:{lat:50,lng:4},to:{lat:51,lng:5}},
+    {from:{lat:0,lng:170},to:{lat:0,lng:-170}},
+    {from:{lat:0,lng:0},to:{lat:0,lng:180}},
+  ]) {
+    const distance=geoDistance(pair(route.from),pair(route.to));
+    for(let i=0;i<=100;i++) {
+      const t=i/100;
+      const a=helpers.flightSample(route,Math.max(0,t-0.002));
+      const b=helpers.flightSample(route,Math.min(1,t+0.002));
+      const pitch=Math.atan2(b.altitude-a.altitude, distance*(b.progress-a.progress));
+      assert.ok(Number.isFinite(pitch) && Math.abs(pitch)<0.18, `Pitch should remain airliner-like: ${pitch}`);
+    }
+  }
+  const near=helpers.flightDuration({lat:50,lng:4},{lat:51,lng:5});
+  const far=helpers.flightDuration({lat:50,lng:4},{lat:-50,lng:-176});
+  assert.ok(near<far && near>=3800 && far<=6800);
+});
