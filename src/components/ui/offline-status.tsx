@@ -66,7 +66,13 @@ export function OfflineStatus() {
     setStatus(previous=>({...previous,error:undefined}));
     try {
       if(!registration.current) {location.reload();return;}
-      await registration.current.update();setWaiting(!!registration.current.waiting);await refresh();
+      await registration.current.update();setWaiting(!!registration.current.waiting);
+      const worker=navigator.serviceWorker.controller;
+      if(worker) {
+        const current=await ask(worker,{type:'STATUS'});setStatus(current);
+        // An unchanged worker will not reinstall itself after cache eviction.
+        if(!current.ready)worker.postMessage({type:'PREPARE'});
+      }
     }catch{setStatus(previous=>({...previous,error:'Reconnect to finish downloading.'}));}
   };
   const toggleDemo=async()=>{

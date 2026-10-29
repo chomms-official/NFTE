@@ -10,9 +10,11 @@ The saved release includes all routes, lazy JavaScript, local fonts, maps, image
 
 Updates wait for an explicit reload, so a new release does not replace the app during a presentation. A partial download, checksum mismatch or unavailable storage cannot report a new release as ready. Old releases and unrelated browser data are preserved.
 
-Validation on 29 Oct 2026: 59 unit/data tests passed. All 80 deployed resources (12.8 MB) matched their release checksums. On the HTTPS production site, the saved-demo mode loaded `/`, `/simulator` and the previously unvisited `/sent-scent` route, with country data and a Thailand-to-Japan flight working. Browser inspection used the software renderer because hardware WebGL was unavailable. Network loss, cache eviction, incomplete downloads and mixed-release files were also exercised in service-worker tests. Physical Wi-Fi-off rehearsal on the presentation device remains the preparation step above.
+Validation on 29 Oct 2026: 60 unit/data tests passed. All 80 deployed resources (12.8 MB) matched their release checksums. On the HTTPS production site, the saved-demo mode loaded `/`, `/simulator` and the previously unvisited `/sent-scent` route, with country data and a Thailand-to-Japan flight working. Browser inspection used the software renderer because hardware WebGL was unavailable. Network loss, cache eviction, incomplete downloads and mixed-release files were also exercised in service-worker tests. Physical Wi-Fi-off rehearsal on the presentation device remains the preparation step above.
 
 ![Published country data and offline demo status](screenshots/offline-country-data.jpg)
+
+If saved files are missing, **Check / retry** downloads the verified release again even when there is no new deployment. It does not clear unrelated data.
 
 ## Published data
 
