@@ -1,256 +1,71 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
+import {webcrypto,createHash} from 'node:crypto';
 import vm from 'node:vm';
-
-const source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
-const origin = 'https://example.test';
-const currentCache = 'mozziemap-cache-v7';
-const GLOBE_HTML = '<main data-app="mozziemap">online</main>';
-
-function bootWorker({ fetcher = async () => new Response(GLOBE_HTML), storageFailure = false, workerOrigin = origin } = {}) {
-  const listeners = new Map();
-  const stores = new Map();
-  const calls = { fetched: [], deleted: [], claimed: 0, skipped: 0 };
-  const key = (request) => typeof request === 'string' ? request : request.url;
-  const caches = {
-    keys: async () => [...stores.keys()],
-    delete: async (name) => { calls.deleted.push(name); return stores.delete(name); },
-    open: async (name) => {
-      if (storageFailure) throw new Error('Storage unavailable');
-      if (!stores.has(name)) stores.set(name, new Map());
-      const cache = stores.get(name);
-      return {
-        match: async (request) => cache.get(key(request))?.clone(),
-        put: async (request, response) => { cache.set(key(request), response.clone()); },
-      };
-    },
-  };
-  vm.runInNewContext(source, {
-    URL, Request, Response, Set,
-    caches,
-    fetch: async (request) => { calls.fetched.push(key(request)); return fetcher(request); },
-    self: {
-      location: { origin: workerOrigin },
-      addEventListener: (type, listener) => listeners.set(type, listener),
-      skipWaiting: async () => { calls.skipped++; },
-      clients: { claim: async () => { calls.claimed++; } },
-    },
-  });
-  function dispatch(type, request) {
-    const lifetime = [];
-    let response;
-    listeners.get(type)({
-      request,
-      waitUntil: (promise) => lifetime.push(promise),
-      respondWith: (promise) => { response = promise; },
-    });
-    return { response, lifetime, done: () => Promise.all(lifetime) };
-  }
-  const request = (path, { headers, mode = 'navigate', method = 'GET', cache = 'default' } = {}) => ({
-    url: path.startsWith('https://') ? path : workerOrigin + path,
-    headers: new Headers(headers), mode, method, cache,
-  });
-  return { dispatch, request, stores, calls };
+const origin='https://example.test';
+const fixtures={'/':'<main data-app="mozziemap">globe</main>','/simulator':'simulator html','/sent-scent':'presentation html','/_next/static/lazy.js':'lazy globe code','/assets/countries.geojson':'{"countries":true}'};
+const release={version:'test123',assets:Object.entries(fixtures).map(([url,text])=>({url,source:url.startsWith('/_next')||url.startsWith('/assets')?url:`/offline-pages/test123${url==='/'?'/index':url}.html`,sha256:createHash('sha256').update(text).digest('hex')}))};
+const source=(await readFile(new URL('../src/service-worker/worker.js',import.meta.url),'utf8')).replace('/* OFFLINE_MANIFEST */ null',JSON.stringify(release));
+const current='mozziemap-offline-test123';
+function boot({failure='',storageFailure=false,hostname='example.test'}={}) {
+ const stores=new Map(),listeners=new Map(),messages=[],calls={fetch:0,skip:0,claim:0};let offline=false;
+ const key=r=>typeof r==='string'?r:r.url;
+ const caches={open:async name=>{
+  if(storageFailure)throw Error('quota');if(!stores.has(name))stores.set(name,new Map());const store=stores.get(name);
+  return {put:async(k,v)=>store.set(key(k),v.clone()),match:async k=>store.get(key(k))?.clone(),keys:async()=>[...store.keys()].map(url=>({url})),delete:async k=>store.delete(key(k))};
+ }};
+ vm.runInNewContext(source,{URL,Request,Response,Set,Uint8Array,crypto:webcrypto,AbortController,setTimeout,clearTimeout,caches,fetch:async r=>{
+  calls.fetch++;if(offline)throw Error('offline');const path=new URL(key(r)).pathname;
+  if(path===failure)return new Response('wrong deployment');
+  const entry=release.assets.find(item=>item.source===path);
+  return new Response(fixtures[entry?.url||path]??'network');
+ },self:{location:{origin,hostname},addEventListener:(type,f)=>listeners.set(type,f),skipWaiting:async()=>calls.skip++,clients:{claim:async()=>calls.claim++,matchAll:async()=>[{postMessage:m=>messages.push(m)}]}}});
+ function dispatch(type,extra={}){const life=[];let response;listeners.get(type)({...extra,waitUntil:p=>life.push(p),respondWith:p=>response=p});return {done:()=>Promise.all(life),response};}
+ const req=(path,extra={})=>({url:origin+path,method:'GET',mode:'navigate',cache:'default',headers:new Headers(),...extra});
+ async function message(data){let reply;await dispatch('message',{data,ports:[{postMessage:m=>reply=m}]}).done();return reply;}
+ return {stores,calls,messages,dispatch,req,message,setOffline:()=>offline=true};
 }
-
-test('activation preserves unrelated user caches and previous app bundles', async () => {
-  const worker = bootWorker();
-  worker.stores.set('user-offline-documents', new Map([['draft', new Response('saved work')]]));
-  worker.stores.set('mozziemap-cache-v5', new Map([['old-bundle', new Response('v5')]]));
-  await worker.dispatch('activate').done();
-  assert.equal(worker.calls.claimed, 1);
-  assert.deepEqual(worker.calls.deleted, []);
-  assert.equal(await worker.stores.get('user-offline-documents').get('draft').text(), 'saved work');
-  assert.ok(worker.stores.has('mozziemap-cache-v5'));
+test('installation precaches lazy modules and pages atomically, without forcing an update',async()=>{
+ const w=boot();await w.dispatch('install').done();const state=await w.message({type:'STATUS'});
+ assert.equal(state.ready,true);assert.equal(state.completed,5);assert.equal(w.calls.skip,0);
+ assert.ok(w.messages.some(m=>m.completed===5));
 });
-
-test('installation tolerates one unavailable asset and awaits successful cache writes', async () => {
-  const worker = bootWorker({ fetcher: async (request) => {
-    if (request.url.endsWith('/og-image.png')) throw new Error('offline');
-    if (request.url.endsWith('/icon-512x512.png')) return new Response('missing', { status: 404 });
-    return new Response('asset');
-  } });
-  await worker.dispatch('install').done();
-  assert.equal(worker.calls.skipped, 1);
-  const cached = worker.stores.get(currentCache);
-  assert.ok(cached.has(origin + '/sent-scent'));
-  assert.ok(cached.has(origin + '/assets/countries.geojson'));
-  assert.equal(cached.has(origin + '/og-image.png'), false);
-  assert.equal(cached.has(origin + '/icon-512x512.png'), false);
+test('every prepared route and lazy module works after connectivity is removed and without visiting it first',async()=>{
+ const w=boot();await w.dispatch('install').done();w.setOffline();const before=w.calls.fetch;
+ for(const [path,text] of Object.entries(fixtures))assert.equal(await (await w.dispatch('fetch',{request:w.req(path)}).response).text(),text);
+ assert.equal(w.calls.fetch,before,'offline hits never wait for the network');
 });
-
-test('navigation serves fresh HTML and registers the cache write lifetime synchronously', async () => {
-  const worker = bootWorker();
-  worker.stores.set(currentCache, new Map([[origin + '/', new Response('old HTML')]]));
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(event.lifetime.length, 1);
-  assert.equal(await (await event.response).text(), GLOBE_HTML);
-  await event.done();
-  assert.equal(await worker.stores.get(currentCache).get(origin + '/').text(), GLOBE_HTML);
+test('partial and mixed-release downloads cannot claim offline readiness',async()=>{
+ const w=boot({failure:'/_next/static/lazy.js'});await assert.rejects(w.dispatch('install').done());
+ assert.equal((await w.message({type:'STATUS'})).ready,false);
+ assert.ok(w.messages.some(m=>m.type==='OFFLINE_ERROR'));
 });
-
-test('offline navigation retains access to prior app pages without reading unrelated user caches', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  worker.stores.set('unrelated-cache', new Map([[origin + '/', new Response('private document')]]));
-  worker.stores.set('mozziemap-cache-v5', new Map([[origin + '/simulator', new Response('old offline simulator')]]));
-  const hit = worker.dispatch('fetch', worker.request('/simulator'));
-  assert.equal(await (await hit.response).text(), 'old offline simulator');
-  await hit.done();
-  const miss = worker.dispatch('fetch', worker.request('/'));
-  const redirect = await miss.response;
-  assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('Location'), origin + '/simulator');
-  await miss.done();
+test('storage eviction is detected before enabling the saved demo',async()=>{
+ const w=boot();await w.dispatch('install').done();w.stores.get(current).delete(origin+'/_next/static/lazy.js');
+ const state=await w.message({type:'SET_DEMO',enabled:true});assert.equal(state.ready,false);assert.ok(state.error);
 });
-
-test('offline static asset misses return a Response rather than undefined', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  const event = worker.dispatch('fetch', worker.request('/hero-product.jpg', { mode: 'cors' }));
-  const response = await event.response;
-  assert.equal(response.status, 503);
-  assert.match(await response.text(), /unavailable offline/);
-  await event.done();
+test('demo mode refuses network fallback and survives subsequent status checks',async()=>{
+ const w=boot();await w.dispatch('install').done();assert.equal((await w.message({type:'SET_DEMO',enabled:true})).demo,true);
+ w.stores.get(current).delete(origin+'/assets/countries.geojson');const before=w.calls.fetch;
+ assert.equal((await w.dispatch('fetch',{request:w.req('/assets/countries.geojson')}).response).status,503);
+ assert.equal(w.calls.fetch,before);
+ assert.equal((await w.message({type:'SET_DEMO',enabled:false})).demo,false,'can exit demo even after eviction');
 });
-
-test('RSC, external, authenticated, query, API and mutation requests bypass worker caching', async () => {
-  const worker = bootWorker();
-  const requests = [
-    worker.request('/', { headers: { RSC: '1' } }),
-    worker.request('/', { headers: { 'Next-Router-Prefetch': '1' } }),
-    worker.request('/', { headers: { 'Next-Router-State-Tree': 'tree' } }),
-    worker.request('/', { headers: { accept: 'text/x-component' } }),
-    worker.request('/?_rsc=state'),
-    worker.request('/?private=information'),
-    worker.request('https://other.test/hero-product.jpg'),
-    worker.request('/hero-product.jpg', { headers: { Authorization: 'placeholder' } }),
-    worker.request('/hero-product.jpg', { cache: 'no-store' }),
-    worker.request('/api/photo.png'),
-    worker.request('/profile/avatar.png'),
-    worker.request('/api/data'),
-    worker.request('/', { method: 'POST' }),
-  ];
-  for (const request of requests) {
-    const event = worker.dispatch('fetch', request);
-    assert.equal(event.response, undefined, request.url);
-    assert.equal(event.lifetime.length, 0, request.url);
-  }
-  assert.equal(worker.calls.fetched.length, 0);
+test('activation and explicit update preserve old releases and user data',async()=>{
+ const w=boot();w.stores.set('unrelated-drafts',new Map([['draft','keep']]));w.stores.set('mozziemap-cache-v7',new Map());
+ await w.dispatch('activate').done();assert.equal(w.calls.claim,1);assert.equal(w.calls.skip,0);
+ await w.message({type:'APPLY_UPDATE'});assert.equal(w.calls.skip,1);assert.equal(w.stores.get('unrelated-drafts').get('draft'),'keep');assert.ok(w.stores.has('mozziemap-cache-v7'));
 });
-
-test('HTTP failures never replace a successful offline page', async () => {
-  const worker = bootWorker({ fetcher: async () => new Response('server error', { status: 500 }) });
-  worker.stores.set(currentCache, new Map([[origin + '/', new Response('last good page')]]));
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal((await event.response).status, 500);
-  await event.done();
-  assert.equal(await worker.stores.get(currentCache).get(origin + '/').text(), 'last good page');
+test('RSC, authenticated, API and private queries never use HTML snapshots',()=>{
+ const w=boot();for(const req of [w.req('/?_rsc=abc'),w.req('/?private=1'),w.req('/api/data'),w.req('/',{method:'POST'}),w.req('/',{headers:new Headers({RSC:'1'})}),w.req('/',{headers:new Headers({Authorization:'token'})})])assert.equal(w.dispatch('fetch',{request:req}).response,undefined);
 });
-
-test('private, no-store and RSC responses never enter the offline cache', async () => {
-  for (const headers of [
-    { 'Cache-Control': 'private, max-age=0' },
-    { 'Cache-Control': 'no-store' },
-    { 'Content-Type': 'text/x-component' },
-  ]) {
-    const worker = bootWorker({ fetcher: async () => new Response('sensitive', { headers }) });
-    const event = worker.dispatch('fetch', worker.request('/'));
-    assert.equal(await (await event.response).text(), 'sensitive');
-    await event.done();
-    assert.equal(worker.stores.has(currentCache), false);
-  }
+test('deployment queries on immutable chunks remain available offline',async()=>{
+ const w=boot();await w.dispatch('install').done();w.setOffline();assert.equal(await(await w.dispatch('fetch',{request:w.req('/_next/static/lazy.js?dpl=release')}).response).text(),'lazy globe code');
 });
-
-test('storage failure does not prevent online navigation', async () => {
-  const worker = bootWorker({ storageFailure: true });
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await event.response).text(), GLOBE_HTML);
-  await event.done();
+test('storage failures preserve online functionality and do not report ready',async()=>{
+ const w=boot({storageFailure:true});assert.equal(await(await w.dispatch('fetch',{request:w.req('/')}).response).text(),fixtures['/']);assert.equal((await w.message({type:'STATUS'})).ready,false);
 });
-
-test('a legacy RSC response cannot be used as an offline HTML document', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  worker.stores.set('mozziemap-cache-v5', new Map([[origin + '/', new Response('RSC payload', {
-    headers: { 'Content-Type': 'text/x-component' },
-  })]]));
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal((await event.response).status, 503);
-  await event.done();
-  assert.ok(worker.stores.has('mozziemap-cache-v5'));
-});
-
-test('an old product homepage is never restored offline and its cached data remains intact', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  const oldProduct = '<main>Chomm’s House product presentation</main>';
-  worker.stores.set('mozziemap-cache-v6', new Map([[origin + '/', new Response(oldProduct)]]));
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal((await event.response).status, 503);
-  await event.done();
-  assert.equal(await worker.stores.get('mozziemap-cache-v6').get(origin + '/').text(), oldProduct);
-  assert.deepEqual(worker.calls.deleted, []);
-});
-
-test('a cached globe homepage is restored offline ahead of the legacy product screen', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  worker.stores.set('mozziemap-cache-v6', new Map([[origin + '/', new Response('old product screen')]]));
-  worker.stores.set(currentCache, new Map([[origin + '/', new Response(GLOBE_HTML)]]));
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await event.response).text(), GLOBE_HTML);
-  await event.done();
-  assert.equal(worker.stores.size, 2);
-});
-
-test('a legacy cached simulator supplies a safe offline route when the globe homepage is not cached yet', async () => {
-  const worker = bootWorker({ fetcher: async () => { throw new Error('offline'); } });
-  worker.stores.set('mozziemap-cache-v6', new Map([
-    [origin + '/', new Response('old product screen')],
-    [origin + '/simulator', new Response('cached mosquito globe')],
-  ]));
-  const rootEvent = worker.dispatch('fetch', worker.request('/'));
-  const redirect = await rootEvent.response;
-  assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('Location'), origin + '/simulator');
-  await rootEvent.done();
-  const simulatorEvent = worker.dispatch('fetch', worker.request('/simulator'));
-  assert.equal(await (await simulatorEvent.response).text(), 'cached mosquito globe');
-  await simulatorEvent.done();
-  assert.equal(await worker.stores.get('mozziemap-cache-v6').get(origin + '/').text(), 'old product screen');
-});
-
-test('an outdated online root response cannot seed the new globe homepage cache', async () => {
-  const worker = bootWorker({ fetcher: async () => new Response('<main>old product screen</main>') });
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal((await event.response).status, 200);
-  await event.done();
-  assert.equal(worker.stores.has(currentCache), false);
-});
-
-test('installing v7 stores the marked globe homepage before offline use', async () => {
-  let online = true;
-  const worker = bootWorker({ fetcher: async () => {
-    if (!online) throw new Error('offline');
-    return new Response(GLOBE_HTML);
-  } });
-  await worker.dispatch('install').done();
-  online = false;
-  const event = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await event.response).text(), GLOBE_HTML);
-  await event.done();
-});
-
-test('the separate SENT SCENT host keeps its intended offline presentation at root', async () => {
-  const presentationOrigin = 'https://sentscent.example.test';
-  const presentation = '<main>Earl Grey Garden</main>';
-  let online = true;
-  const worker = bootWorker({ workerOrigin: presentationOrigin, fetcher: async () => {
-    if (!online) throw new Error('offline');
-    return new Response(presentation);
-  } });
-  const firstVisit = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await firstVisit.response).text(), presentation);
-  await firstVisit.done();
-  online = false;
-  const offlineVisit = worker.dispatch('fetch', worker.request('/'));
-  assert.equal(await (await offlineVisit.response).text(), presentation);
-  await offlineVisit.done();
+test('the SENT SCENT host keeps its presentation homepage',async()=>{
+ const w=boot({hostname:'sentscent.example.test'});await w.dispatch('install').done();w.setOffline();assert.equal(await(await w.dispatch('fetch',{request:w.req('/')}).response).text(),'presentation html');
 });

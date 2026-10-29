@@ -156,7 +156,7 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
           return [point.lng, point.lat];
         });
         ctx.beginPath(); path({ type: "LineString", coordinates: route });
-        ctx.strokeStyle = "rgba(240,246,255,0.72)"; ctx.lineWidth = 2.5;
+        ctx.strokeStyle = "rgba(240,246,255,0.35)"; ctx.lineWidth = 1.2;
         ctx.shadowColor = "#8bcbff"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
         const position = flightSample(flight, progress);
         const future = flightSample(flight, Math.min(1, progress + 0.003));
@@ -173,7 +173,7 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
           canvas.dataset.flightLatitude = position.lat.toFixed(6); canvas.dataset.flightLongitude = position.lng.toFixed(6);
           canvas.dataset.flightPhase = position.phase;
           ctx.save(); ctx.translate(projected[0], projected[1] - lift); ctx.rotate(angle);
-          const size = width < 600 ? 0.85 : 1.15; ctx.scale(size,size);
+          const size = width < 600 ? 0.42 : 0.50; ctx.scale(size,size);
           drawSoftwareAirliner(ctx, position.bank);
           ctx.restore();
         }

@@ -184,5 +184,5 @@ test('short routes climb gently and every route has stable endpoint tangents', (
   }
   const near=helpers.flightDuration({lat:50,lng:4},{lat:51,lng:5});
   const far=helpers.flightDuration({lat:50,lng:4},{lat:-50,lng:-176});
-  assert.ok(near<far && near>=3800 && far<=6800);
+  assert.ok(near<far && near>=5200 && far<=9400);
 });

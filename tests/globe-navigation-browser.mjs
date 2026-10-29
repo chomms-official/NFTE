@@ -118,8 +118,8 @@ for (const disabled of [true, false]) {
     await page.selectOption('#country-select', 'Japan');
     await page.selectOption('#country-select', 'France');
     assert.match(await page.getByTestId('globe-flight').textContent(), /Brazil.*Japan.*Next: France/);
-    await page.waitForFunction(() => document.querySelector('[data-testid="globe-flight"]')?.textContent.includes('Japan → France'), null, { timeout: 10000 });
-    await page.getByRole('heading', { name: 'France', exact: true }).waitFor({ timeout: 16000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid="globe-flight"]')?.textContent.includes('Japan → France'), null, { timeout: 12000 });
+    await page.getByRole('heading', { name: 'France', exact: true }).waitFor({ timeout: 22000 });
     await page.getByRole('button', { name: 'Close country details' }).click();
     await selected(page, 'France');
     assert.equal(await page.getByTestId('globe-flight').count(),0, 'Same-country selections must not launch a loop');
@@ -135,7 +135,7 @@ for (const disabled of [true, false]) {
       }
       [...document.querySelectorAll('button')].find(button => button.textContent.includes('ANOPHELES')).click();
     });
-    await page.waitForTimeout(7200);
+    await page.waitForTimeout(10000);
     assert.equal(await details(page).count(),0);
     assert.equal(await page.getByTestId('globe-flight').count(),0);
     await page.setViewportSize({ width: 390, height: 844 });
