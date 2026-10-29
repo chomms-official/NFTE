@@ -5,7 +5,9 @@ import { geoGraticule10, geoPath } from "d3-geo";
 import type { Feature, Geometry } from "geojson";
 import { countryName, type CountryFeature } from "@/lib/simulator";
 import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe } from "@/lib/software-globe-projection";
-import { interpolateFlightPosition, type GlobeFlight } from "@/lib/globe-navigation";
+import { flightSample, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+
+import { drawSoftwareAirliner } from "@/lib/airliner";
 
 export type SoftwareGlobeProps = {
   countries: CountryFeature[];
@@ -150,15 +152,15 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         const progress = Math.max(0, Math.min(1, (performance.now() - flight.startedAt) / Math.max(1, flight.duration)));
         canvas.dataset.flightId = String(flight.id); canvas.dataset.flightProgress = progress.toFixed(4);
         const route = Array.from({ length: 35 }, (_, i) => {
-          const point = interpolateFlightPosition(flight.from, flight.to, Math.max(0, progress - 0.22) + Math.min(progress, 0.22) * i / 34);
+          const point = flightSample(flight, Math.max(0, progress - 0.22) + Math.min(progress, 0.22) * i / 34);
           return [point.lng, point.lat];
         });
         ctx.beginPath(); path({ type: "LineString", coordinates: route });
         ctx.strokeStyle = "rgba(240,246,255,0.72)"; ctx.lineWidth = 2.5;
         ctx.shadowColor = "#8bcbff"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
-        const position = interpolateFlightPosition(flight.from, flight.to, progress);
-        const future = interpolateFlightPosition(flight.from, flight.to, Math.min(1, progress + 0.003));
-        const past = interpolateFlightPosition(flight.from, flight.to, Math.max(0, progress - 0.003));
+        const position = flightSample(flight, progress);
+        const future = flightSample(flight, Math.min(1, progress + 0.003));
+        const past = flightSample(flight, Math.max(0, progress - 0.003));
         const projected = projection([position.lng, position.lat]);
         const ahead = projection([future.lng, future.lat]);
         const behind = projection([past.lng, past.lat]);
@@ -166,21 +168,14 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         canvas.dataset.flightVisible = String(planeVisible);
         if (projected && ahead && behind && planeVisible) {
           const angle = Math.atan2(ahead[1] - behind[1], ahead[0] - behind[0]) + Math.PI / 2;
-          const lift = Math.sin(progress * Math.PI) * 14;
+          const lift = (position.altitude - 0.009) * 280;
           canvas.dataset.flightX = projected[0].toFixed(2); canvas.dataset.flightY = (projected[1] - lift).toFixed(2);
+          canvas.dataset.flightLatitude = position.lat.toFixed(6); canvas.dataset.flightLongitude = position.lng.toFixed(6);
+          canvas.dataset.flightPhase = position.phase;
           ctx.save(); ctx.translate(projected[0], projected[1] - lift); ctx.rotate(angle);
-          ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
-          // White fuselage, wide wings, tail stabilisers and a red nose, matching the WebGL aircraft.
-          ctx.fillStyle = "#f5f7fa"; ctx.strokeStyle = "#24364e"; ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(0, -20); ctx.lineTo(4, -9); ctx.lineTo(5, -2); ctx.lineTo(23, 7);
-          ctx.lineTo(23, 11); ctx.lineTo(5, 6); ctx.lineTo(4, 16); ctx.lineTo(11, 21);
-          ctx.lineTo(11, 24); ctx.lineTo(0, 20); ctx.lineTo(-11, 24); ctx.lineTo(-11, 21);
-          ctx.lineTo(-4, 16); ctx.lineTo(-5, 6); ctx.lineTo(-23, 11); ctx.lineTo(-23, 7);
-          ctx.lineTo(-5, -2); ctx.lineTo(-4, -9); ctx.closePath(); ctx.fill(); ctx.stroke();
-          ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.fillStyle = "#ef3434";
-          ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(3.6, -10); ctx.lineTo(-3.6, -10); ctx.closePath(); ctx.fill();
-          ctx.fillStyle = "#244361"; ctx.fillRect(-2, -8, 4, 4); ctx.restore();
+          const size = width < 600 ? 0.85 : 1.15; ctx.scale(size,size);
+          drawSoftwareAirliner(ctx, position.bank);
+          ctx.restore();
         }
       }
       ctx.restore();
@@ -286,12 +281,12 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         const flight = activeFlight();
         if (flight) {
           const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
-          const position = interpolateFlightPosition(flight.from, flight.to, t);
+          const position = flightSample(flight, t);
           rotation = [-position.lng, -position.lat, 0];
-          const smooth = (value: number) => value * value * (3 - 2 * value);
+          const smooth = smoothFlightStep;
           const cruise = Math.min(1.2, flightStartZoom);
-          zoom = t < 0.5 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t * 2)
-            : cruise + (clampZoom(flight.zoom) - cruise) * smooth((t - 0.5) * 2);
+          zoom = t < 0.28 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t / 0.28)
+            : cruise + (clampZoom(flight.zoom) - cruise) * smooth((t - 0.68) / 0.32);
           draw();
           if (t >= 1) {
             completedFlightId = flight.id; delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false";

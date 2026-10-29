@@ -54,7 +54,14 @@ for (const disabled of [true, false]) {
     }
     await page.waitForLoadState('networkidle');
     await stop(page);
+    await page.getByRole('button', { name: 'Reset globe view', exact: true }).click();
+    await selected(page, 'Belgium');
+    assert.equal(await page.getByTestId('globe-flight').count(), 0, 'First selection only establishes a departure');
+    await page.getByRole('button', { name: 'Close country details' }).click();
+    await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
     await page.selectOption('#country-select', 'Thailand');
+    assert.match(await page.getByTestId('globe-flight').textContent(), /Belgium.*Thailand/,
+      'Changing the camera cannot change the departure country');
     await page.getByTestId('globe-flight').waitFor();
     const flightTarget = disabled ? 'canvas[data-testid="software-globe"]' : '#globe-container';
     await page.waitForFunction(selector => {
@@ -75,7 +82,7 @@ for (const disabled of [true, false]) {
         if (data[i] > 90 && data[i] > data[i+1]*1.7 && data[i] > data[i+2]*1.7) red++;
       }
     }
-    assert.ok(white > 10 && red > 2, `Aircraft needs visible white body and red nose, ${mode}: ${white}/${red}`);
+    assert.ok(white > 10 && red > 2, `Aircraft needs visible white body and red tail/winglets, ${mode}: ${white}/${red}`);
     await page.getByRole('heading', { name: 'Thailand', exact: true }).waitFor();
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${artifacts}/country-${mode}-thailand.png` });
@@ -108,6 +115,15 @@ for (const disabled of [true, false]) {
     const brazil = +(await page.locator(flightTarget).getAttribute(disabled ? 'data-zoom' : 'data-altitude'));
     assert.ok(disabled ? belgium > brazil * 5 : belgium < brazil / 5, `Country fit must depend on country size: ${belgium}/${brazil}`);
     await page.getByRole('button', { name: 'Close country details' }).click();
+    await page.selectOption('#country-select', 'Japan');
+    await page.selectOption('#country-select', 'France');
+    assert.match(await page.getByTestId('globe-flight').textContent(), /Brazil.*Japan.*Next: France/);
+    await page.waitForFunction(() => document.querySelector('[data-testid="globe-flight"]')?.textContent.includes('Japan → France'), null, { timeout: 10000 });
+    await page.getByRole('heading', { name: 'France', exact: true }).waitFor({ timeout: 16000 });
+    await page.getByRole('button', { name: 'Close country details' }).click();
+    await selected(page, 'France');
+    assert.equal(await page.getByTestId('globe-flight').count(),0, 'Same-country selections must not launch a loop');
+    await page.getByRole('button', { name: 'Close country details' }).click();
     // Rapid changes/cancellation cannot open stale destination details afterwards.
     // Dispatch in one browser task so protocol latency on a software GPU cannot
     // accidentally turn rapid input into commands issued after landing.
@@ -119,7 +135,7 @@ for (const disabled of [true, false]) {
       }
       [...document.querySelectorAll('button')].find(button => button.textContent.includes('ANOPHELES')).click();
     });
-    await page.waitForTimeout(3800);
+    await page.waitForTimeout(7200);
     assert.equal(await details(page).count(),0);
     assert.equal(await page.getByTestId('globe-flight').count(),0);
     await page.setViewportSize({ width: 390, height: 844 });

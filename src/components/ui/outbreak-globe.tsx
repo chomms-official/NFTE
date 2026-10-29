@@ -9,7 +9,7 @@ import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
 import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
 
-import { countryFraming, interpolateFlightPosition, type GlobeFlight } from "@/lib/globe-navigation";
+import { countryFraming, flightDuration, flightSample, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -20,43 +20,7 @@ const Globe = dynamic(() => import("react-globe.gl"), {
   ),
 });
 
-const createAirplane = () => {
-  const group = new THREE.Group();
-  
-  // Fuselage
-  const bodyGeo = new THREE.CylinderGeometry(0.6, 0.6, 4, 16);
-  bodyGeo.rotateX(Math.PI / 2); 
-  const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0x111111, shininess: 100 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  
-  // Nose (pointing to -Z)
-  const noseGeo = new THREE.ConeGeometry(0.6, 2, 16);
-  noseGeo.translate(0, 3, 0); // move along +Y
-  noseGeo.rotateX(-Math.PI / 2); // rotate +Y to -Z
-  const noseMat = new THREE.MeshPhongMaterial({ color: 0xcc0000, specular: 0x111111, shininess: 100 });
-  const nose = new THREE.Mesh(noseGeo, noseMat);
-  
-  // Wings
-  const wingGeo = new THREE.BoxGeometry(7, 0.15, 2);
-  const wingMat = new THREE.MeshPhongMaterial({ color: 0xdddddd });
-  const wings = new THREE.Mesh(wingGeo, wingMat);
-  wings.position.set(0, 0, 0);
-  
-  // Tail
-  const tailGeo = new THREE.BoxGeometry(3, 0.15, 1);
-  const tail = new THREE.Mesh(tailGeo, wingMat);
-  tail.position.set(0, 0, 1.5);
-  
-  // Fin
-  const finGeo = new THREE.BoxGeometry(0.15, 1.5, 1.2);
-  const fin = new THREE.Mesh(finGeo, noseMat);
-  fin.position.set(0, 0.75, 1.5);
-  
-  group.add(body, nose, wings, tail, fin);
-  group.scale.set(0.6, 0.6, 0.6); 
-  
-  return group;
-};
+import { createAirliner } from "@/lib/airliner";
 
 type MosquitoType = "aedes" | "anopheles" | "culex";
 
@@ -316,10 +280,14 @@ export default function OutbreakGlobe() {
   const [activeMosquito, setActiveMosquito] = useState<MosquitoType>("aedes");
   const [geoJsonData, setGeoJsonData] = useState<any[]>([]);
   const [activeCountry, setActiveCountry] = useState<any>(null);
-  const [flight, setFlight] = useState<(GlobeFlight & { countryName: string }) | null>(null);
+  const [flight, setFlight] = useState<(GlobeFlight & { countryName: string; originName: string }) | null>(null);
   const flightRef = useRef<GlobeFlight | null>(null);
   const flightIdRef = useRef(0);
   const destinationRef = useRef<CountryFeature | null>(null);
+  // Country identity survives closing details and moving the camera.
+  const departureRef = useRef<CountryFeature | null>(null);
+  const queuedCountryRef = useRef<CountryFeature | null>(null);
+  const [queuedCountryName, setQueuedCountryName] = useState<string | null>(null);
   const softwareView = useRef({ lat: 15, lng: 100, zoom: 1 });
   const mapContainer = useRef<HTMLDivElement>(null);
   const [globeReady, setGlobeReady] = useState(false);
@@ -341,6 +309,8 @@ export default function OutbreakGlobe() {
     animationFrameRef.current = null;
     flightRef.current = null;
     destinationRef.current = null;
+    queuedCountryRef.current = null;
+    setQueuedCountryName(null);
     setFlight(null);
     if (mapContainer.current) mapContainer.current.dataset.flightVisible = "false";
     airplaneMeshRef.current?.removeFromParent();
@@ -363,8 +333,13 @@ export default function OutbreakGlobe() {
   const completeFlight = useCallback((id: number) => {
     if (flightRef.current?.id !== id) return;
     const destination = destinationRef.current;
+    const queued = queuedCountryRef.current;
     cancelFlight();
-    setActiveCountry(destination);
+    departureRef.current = destination;
+    if (queued) {
+      // Continue from the country just reached, never from an arbitrary camera view.
+      selectCountryRef.current(queued);
+    } else setActiveCountry(destination);
   }, [cancelFlight]);
 
   const panelWidth = windowWidth >= 768 ? Math.min(windowWidth * 0.48, 672) : windowWidth;
@@ -375,19 +350,36 @@ export default function OutbreakGlobe() {
 
   const handleSelectCountry = (countryFeature: any, isManual = false) => {
     if (!rendererReady) return;
-    cancelFlight();
     if (isManual) setAutoTourEnabled(false);
+    const name = String(countryFeature.properties.ADMIN || countryFeature.properties.NAME);
+    if (flightRef.current) {
+      const destination = destinationRef.current;
+      const destinationName = destination?.properties.ADMIN || destination?.properties.NAME;
+      queuedCountryRef.current = name === destinationName ? null : countryFeature;
+      setQueuedCountryName(name === destinationName ? null : name);
+      return;
+    }
+    cancelFlight();
     const selectedWidth = windowWidth >= 768 ? windowWidth - panelWidth : windowWidth;
     const selectedHeight = windowWidth >= 768 ? windowHeight : windowHeight - panelHeight;
     const framing = countryFraming(countryFeature, selectedWidth / selectedHeight);
     const gpu = globeReady ? globeEl.current : null;
     const current = gpu ? gpu.pointOfView() : softwareView.current;
-    const from = { lat: current.lat, lng: current.lng };
+    const departure = departureRef.current;
+    const originName = String(departure?.properties.ADMIN || departure?.properties.NAME || "");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const nextFlight: GlobeFlight & { countryName: string } = {
-      id: ++flightIdRef.current, countryName: String(countryFeature.properties.ADMIN || countryFeature.properties.NAME),
+    // The first selection establishes an origin. Re-selecting it is not a flight.
+    // Reduced-motion users get the final country view without a camera sweep.
+    if (!departure || originName === name || reducedMotion) {
+      departureRef.current = countryFeature;
+      setActiveCountry(countryFeature);
+      return;
+    }
+    const from = countryFraming(departure).center;
+    const nextFlight: GlobeFlight & { countryName: string; originName: string } = {
+      id: ++flightIdRef.current, countryName: name, originName,
       from, to: framing.center, startedAt: performance.now(),
-      duration: reducedMotion ? 900 : 3600, zoom: framing.softwareZoom,
+      duration: flightDuration(from, framing.center), zoom: framing.softwareZoom,
     };
     destinationRef.current = countryFeature;
     flightRef.current = nextFlight;
@@ -396,7 +388,7 @@ export default function OutbreakGlobe() {
     if (!gpu) return;
 
     gpu.controls().autoRotate = false;
-    if (!airplaneMeshRef.current) airplaneMeshRef.current = createAirplane();
+    if (!airplaneMeshRef.current) airplaneMeshRef.current = createAirliner();
     const plane = airplaneMeshRef.current;
     plane.name = "mosquito-airplane";
     gpu.scene().add(plane);
@@ -409,38 +401,53 @@ export default function OutbreakGlobe() {
     // Positions move around the entire sphere; avoid stale culling bounds.
     trailLine.frustumCulled = false;
     gpu.scene().add(trailLine); trailLineRef.current = trailLine;
-    const startAltitude = Math.max(0.015, current.altitude);
+    const startAltitude = Math.max(0.12, current.altitude);
     const cruiseAltitude = Math.max(1.4, Math.min(2.2, startAltitude));
-    const smooth = (value: number) => value * value * (3 - 2 * value);
+    const smooth = smoothFlightStep;
+    const previousPoint = new THREE.Vector3(), nextPoint = new THREE.Vector3();
+    const direction = new THREE.Vector3(), target = new THREE.Vector3();
+    const radialUp = new THREE.Vector3();
+    const beacon = plane.getObjectByName("beacon");
     const animateFlight = (time: number) => {
       if (flightRef.current?.id !== nextFlight.id || !globeEl.current) return;
       const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
-      const position = interpolateFlightPosition(from, nextFlight.to, t);
-      const lift = 0.015 + Math.sin(t * Math.PI) * 0.2;
-      const currentPos = gpu.getCoords(position.lat, position.lng, lift);
-      const ahead = interpolateFlightPosition(from, nextFlight.to, Math.min(1, t + 0.003));
-      const nextPos = gpu.getCoords(ahead.lat, ahead.lng, lift);
+      const position = flightSample(nextFlight, t);
+      const currentPos = gpu.getCoords(position.lat, position.lng, position.altitude);
+      const ahead = flightSample(nextFlight, Math.min(1, t + 0.002));
+      const behind = flightSample(nextFlight, Math.max(0, t - 0.002));
+      const next = gpu.getCoords(ahead.lat, ahead.lng, ahead.altitude);
+      const previous = gpu.getCoords(behind.lat, behind.lng, behind.altitude);
+      nextPoint.set(next.x, next.y, next.z); previousPoint.set(previous.x, previous.y, previous.z);
       plane.position.copy(currentPos);
-      plane.up.copy(currentPos).normalize();
-      plane.lookAt(nextPos.x, nextPos.y, nextPos.z);
-      // Three's lookAt aims local +Z; the model's red nose points along -Z.
-      plane.rotateY(Math.PI);
+      radialUp.copy(plane.position).normalize(); plane.up.copy(radialUp);
+      direction.subVectors(nextPoint, previousPoint).normalize();
+      // Tangent includes the altitude gradient: nose rises on climb and lowers on approach.
+      target.copy(plane.position).add(direction);
+      plane.lookAt(target); plane.rotateY(Math.PI); plane.rotateZ(position.bank);
+      if (beacon) beacon.visible = (time % 1600) < 110 || (time % 1600 > 230 && time % 1600 < 310);
       for (let i = 0; i < maxTrailPoints; i++) {
         const tailT = Math.max(0, t - 0.18 * i / (maxTrailPoints - 1));
-        const tail = interpolateFlightPosition(from, nextFlight.to, tailT);
-        const point = gpu.getCoords(tail.lat, tail.lng, 0.015 + Math.sin(tailT * Math.PI) * 0.2);
+        const tail = flightSample(nextFlight, tailT);
+        const point = gpu.getCoords(tail.lat, tail.lng, tail.altitude);
         trailPositions.set([point.x, point.y, point.z], i * 3);
       }
       trailGeo.attributes.position.needsUpdate = true;
       // Follow the plane before descending to a country-sized view.
-      const altitude = t < 0.5 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t * 2)
-        : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.5) * 2);
-      gpu.pointOfView({ ...position, altitude }, 0);
+      const altitude = t < 0.28 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t / 0.28)
+        : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.68) / 0.32);
+      gpu.pointOfView({ lat: position.lat, lng: position.lng, altitude }, 0);
+      // Keep a readable model size without engulfing small countries on approach.
+      const camera = gpu.camera() as THREE.PerspectiveCamera;
+      const viewHeight = Math.max(1, mapContainer.current?.clientHeight || windowHeight);
+      const span = 2 * camera.position.distanceTo(plane.position) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      plane.scale.setScalar(span * (windowWidth < 600 ? 54 : 74) / viewHeight / 12.2);
       const projected = plane.position.clone().project(gpu.camera());
       if (mapContainer.current) {
         const bounds = mapContainer.current.getBoundingClientRect();
         Object.assign(mapContainer.current.dataset, {
           flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
+          flightFrom: originName, flightTo: name, flightPhase: position.phase,
+          flightLatitude: position.lat.toFixed(6), flightLongitude: position.lng.toFixed(6),
           flightVisible: String(Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1 && projected.z < 1),
           flightX: ((projected.x + 1) / 2 * bounds.width).toFixed(2),
           flightY: ((1 - projected.y) / 2 * bounds.height).toFixed(2), altitude: altitude.toFixed(4),
@@ -518,8 +525,8 @@ export default function OutbreakGlobe() {
     tourMosquitoIndexRef.current = 0;
     startTourCycle();
     
-    // Give time to read before switching (flight takes ~3s, read for ~5s = 8000ms)
-    tourIntervalRef.current = setInterval(nextTourStep, 8000);
+    // Allow up to 6.8s of flight, then time to read the destination.
+    tourIntervalRef.current = setInterval(nextTourStep, 12000);
 
     return () => {
       if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
@@ -738,7 +745,7 @@ export default function OutbreakGlobe() {
             autoRotate={autoTourEnabled && !activeCountry}
             onInteraction={() => { setAutoTourEnabled(false); cancelFlight(); }}
             onReady={setSoftwareReady}
-            onReset={() => setActiveCountry(null)}
+            onReset={() => { departureRef.current = null; setActiveCountry(null); }}
             focus={softwareFocus}
             flight={flight}
             onFlightComplete={completeFlight}
@@ -782,13 +789,14 @@ export default function OutbreakGlobe() {
           <button type="button" aria-label="Zoom in" onClick={() => changeGpuZoom(1 / 1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">+</button>
           <button type="button" aria-label="Zoom out" onClick={() => changeGpuZoom(1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">−</button>
           <button type="button" aria-label="Reset globe view" onClick={() => {
-            cancelFlight(); setAutoTourEnabled(false); setActiveCountry(null);
+            cancelFlight(); departureRef.current = null; setAutoTourEnabled(false); setActiveCountry(null);
             globeEl.current?.pointOfView({ lat: 15, lng: 100, altitude: 2.2 }, 350);
           }} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-lg">↺</button>
         </div>}
       </div>
       {flight && <div data-testid="globe-flight" role="status" className="absolute top-44 sm:top-56 left-1/2 -translate-x-1/2 text-xs text-blue-100 bg-black/70 px-3 py-2 rounded-lg pointer-events-none z-30">
-        ✈ Flying to {flight.countryName}
+        <span>✈ {flight.originName} → {flight.countryName}</span>
+        {queuedCountryName && <span className="block mt-1 text-blue-200/75">Next: {queuedCountryName}</span>}
       </div>}
 
       {!activeCountry && <div className="absolute top-32 sm:top-44 left-1/2 -translate-x-1/2 z-40 w-60 max-w-[80vw]">
