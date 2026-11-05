@@ -85,7 +85,9 @@ export function drawSoftwareAirliner(ctx: CanvasRenderingContext2D, bank: number
   polygon([[-2,-25],[2,-25],[2.5,-22],[-2.5,-22]],"#18344b");
   ctx.fillStyle="#253c50";
   for(let i=0;i<14;i++){ctx.fillRect(-2.8,-18+i*2.2,0.8,1);ctx.fillRect(2,-18+i*2.2,0.8,1);}
-  polygon([[0,14],[2,25],[0,29],[-1,24]],"#c92336");
+  // The upright fin projects to the low-wing side as the aircraft rolls.
+  const finShift = -10 * Math.tan(bank);
+  polygon([[0,14],[2 + finShift,25],[finShift,29],[-1,24]],"#c92336");
   for(const s of [-1,1]){ctx.fillStyle=s<0?"#ff354f":"#43ffb0";ctx.beginPath();ctx.arc(s*29,7,1.2,0,Math.PI*2);ctx.fill();}
   ctx.restore();
 }

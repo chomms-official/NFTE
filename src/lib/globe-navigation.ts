@@ -31,13 +31,7 @@ export function flightSample(flight: Pick<GlobeFlight, "from" | "to">, elapsed: 
   const progress = t < ramp ? ramp * integral(t / ramp) / (1 - ramp)
     : t > 1 - ramp ? 1 - ramp * integral((1 - t) / ramp) / (1 - ramp)
       : (t - ramp / 2) / (1 - ramp);
-  // Short legs need a lower arc; otherwise neighbouring countries produce a
-  // near-vertical climb. Express lift in travelled distance, not clock time.
-  const distance = geoDistance([flight.from.lng, flight.from.lat], [flight.to.lng, flight.to.lat]);
-  const lift = Math.min(0.018, distance * 0.017);
-  const altitude = 0.009 + lift * smoothFlightStep(progress / 0.22) * (1 - smoothFlightStep((progress - 0.74) / 0.26));
-  return { ...interpolateFlightPosition(flight.from, flight.to, progress), progress, altitude,
-    bank: 0,
+  return { ...flightRouteSample(flight, progress),
     phase: t < 0.24 ? "Climbing" : t < 0.72 ? "Cruising" : "Descending" };
 }
 
@@ -49,6 +43,55 @@ const coordinate = ({ lat, lng }: GlobeCoordinate): GlobeCoordinate => ({
   lng: longitude(Number.isFinite(lng) ? lng : 0),
 });
 const pair = ({ lat, lng }: GlobeCoordinate): [number, number] => [lng, lat];
+
+const unitVector = ({ lat, lng }: GlobeCoordinate) => [
+  Math.cos(lat * radians) * Math.cos(lng * radians),
+  Math.cos(lat * radians) * Math.sin(lng * radians), Math.sin(lat * radians),
+];
+
+/** A compact turn with zero offset, slope and curvature at both joins. */
+function turnEnvelope(progress: number, start: number, width: number) {
+  const u = (progress - start) / width;
+  if (u <= 0 || u >= 1) return { value: 0, slope: 0, curvature: 0 };
+  return {
+    value: 64 * u ** 3 * (1 - u) ** 3,
+    slope: 192 * u ** 2 * (1 - u) ** 2 * (1 - 2 * u) / width,
+    curvature: 384 * u * (1 - u) * (1 - 5 * u + 5 * u ** 2) / width ** 2,
+  };
+}
+
+/** Departure/arrival turns around a great-circle cruise, shared by plane and trail. */
+export function flightRouteSample(flight: Pick<GlobeFlight, "from" | "to">, value: number) {
+  const progress = clamp(Number.isFinite(value) ? value : 0, 0, 1);
+  const from = coordinate(flight.from), to = coordinate(flight.to);
+  const distance = geoDistance(pair(from), pair(to));
+  const base = interpolateFlightPosition(from, to, progress);
+  const departure = turnEnvelope(progress, 0, 0.28);
+  const arrival = turnEnvelope(progress, 0.72, 0.28);
+  const amplitude = Math.min(0.045, distance * 0.035);
+  const offset = amplitude * (departure.value - arrival.value);
+  const slope = amplitude * (departure.slope - arrival.slope);
+  const curvature = amplitude * (departure.curvature - arrival.curvature);
+  let position = base, bank = 0;
+  if (distance > 1e-8 && offset !== 0) {
+    // The midpoint also defines a stable plane for an antipodal route.
+    const a = unitVector(from), b = unitVector(interpolateFlightPosition(from, to, 0.5));
+    const normal = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const length = Math.hypot(...normal), centre = unitVector(base);
+    const point = centre.map((component, i) => component * Math.cos(offset) + normal[i] / length * Math.sin(offset));
+    position = { lat: Math.atan2(point[2], Math.hypot(point[0], point[1])) / radians,
+      lng: longitude(Math.atan2(point[1], point[0]) / radians) };
+    // Signed steering rate on the sphere, rather than a decorative roll wave.
+    const forward = distance * Math.cos(offset);
+    const steering = (forward * curvature + distance * Math.sin(offset) * slope ** 2)
+      / (forward ** 2 + slope ** 2) + distance * Math.sin(offset);
+    bank = clamp(Math.atan(steering * 0.045), -25 * radians, 25 * radians);
+  }
+  // Short neighbouring legs keep a shallow climb instead of rising vertically.
+  const lift = Math.min(0.018, distance * 0.017);
+  const altitude = 0.009 + lift * smoothFlightStep(progress / 0.22) * (1 - smoothFlightStep((progress - 0.74) / 0.26));
+  return { ...position, progress, altitude, bank };
+}
 
 /** Great-circle routing takes the short path across the date line. */
 export function interpolateFlightPosition(from: GlobeCoordinate, to: GlobeCoordinate, progress: number): GlobeCoordinate {
@@ -75,11 +118,11 @@ export function interpolateFlightPosition(from: GlobeCoordinate, to: GlobeCoordi
   return { lat, lng: longitude(lng) };
 }
 
-/** Heading in degrees clockwise from geographic north, along the same route. */
+/** Heading in degrees clockwise from geographic north, including terminal turns. */
 export function flightBearing(from: GlobeCoordinate, to: GlobeCoordinate, progress = 0): number {
   const t = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
-  const a = interpolateFlightPosition(from, to, Math.max(0, t - 0.0001));
-  const b = interpolateFlightPosition(from, to, Math.min(1, t + 0.0001));
+  const a = flightRouteSample({ from, to }, Math.max(0, t - 0.000001));
+  const b = flightRouteSample({ from, to }, Math.min(1, t + 0.000001));
   const delta = longitude(b.lng - a.lng) * radians;
   const lat1 = a.lat * radians, lat2 = b.lat * radians;
   const heading = Math.atan2(Math.sin(delta) * Math.cos(lat2),
@@ -122,10 +165,11 @@ export function countryFraming(feature: CountryFeature, aspect = 1) {
   const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
   const smallerDimension = Math.min(safeAspect, 1);
   const baseRadius = Math.min(safeAspect * 0.43, 0.35);
-  const softwareZoom = clamp(0.35 * smallerDimension / (baseRadius * Math.sin(angularRadius)), 0.65, 80);
-  // Perspective fit for react-globe.gl's 50-degree vertical camera. Account for
-  // both the land's width and its depth on the curved surface of the earth.
+  // Keep the globe's horizon visible: its diameter occupies 86% of the shorter
+  // viewport dimension, even for a tiny country or a narrow tablet side panel.
+  const softwareZoom = 0.43 * smallerDimension / baseRadius;
+  // Perspective silhouette radius = 1 / (tan(FOV/2) * sqrt(distance² - 1)).
   const halfFovTangent = Math.tan(25 * radians) * smallerDimension;
-  const webglAltitude = clamp(Math.cos(angularRadius) - 1 + Math.sin(angularRadius) / (0.7 * halfFovTangent), 0.012, 6);
+  const webglAltitude = Math.sqrt(1 + (1 / (0.86 * halfFovTangent)) ** 2) - 1;
   return { center, angularRadius, softwareZoom, webglAltitude };
 }

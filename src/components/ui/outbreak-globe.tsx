@@ -10,7 +10,9 @@ import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
 import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
 
-import { countryFraming, flightDuration, flightSample, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { countryFraming, flightDuration, flightSample, flightRouteSample, interpolateFlightPosition, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { createAutopilotStops } from "@/lib/autopilot-stops";
+import { prepareCountryGeometry, COUNTRY_CAP_RESOLUTION, COUNTRY_ALTITUDE } from "@/lib/country-geometry";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -302,10 +304,12 @@ export default function OutbreakGlobe() {
   const airplaneMeshRef = useRef<THREE.Group | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const tourStopsRef = useRef<ReturnType<typeof createAutopilotStops> | null>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
 
   const cancelFlight = useCallback(() => {
+    tourStopsRef.current?.depart();
     if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = null;
     flightRef.current = null;
@@ -340,7 +344,10 @@ export default function OutbreakGlobe() {
     if (queued) {
       // Continue from the country just reached, never from an arbitrary camera view.
       selectCountryRef.current(queued);
-    } else setActiveCountry(destination);
+    } else {
+      setActiveCountry(destination);
+      tourStopsRef.current?.arrive();
+    }
   }, [cancelFlight]);
 
   const panelWidth = windowWidth >= 768 ? Math.min(windowWidth * 0.48, 672) : windowWidth;
@@ -374,6 +381,7 @@ export default function OutbreakGlobe() {
     if (!departure || originName === name || reducedMotion) {
       departureRef.current = countryFeature;
       setActiveCountry(countryFeature);
+      tourStopsRef.current?.arrive();
       return;
     }
     const from = countryFraming(departure).center;
@@ -416,8 +424,8 @@ export default function OutbreakGlobe() {
       const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
       const position = flightSample(nextFlight, t);
       const currentPos = gpu.getCoords(position.lat, position.lng, position.altitude);
-      const ahead = flightSample(nextFlight, Math.min(1, t + 0.002));
-      const behind = flightSample(nextFlight, Math.max(0, t - 0.002));
+      const ahead = flightRouteSample(nextFlight, Math.min(1, position.progress + 0.0001));
+      const behind = flightRouteSample(nextFlight, Math.max(0, position.progress - 0.0001));
       const next = gpu.getCoords(ahead.lat, ahead.lng, ahead.altitude);
       const previous = gpu.getCoords(behind.lat, behind.lng, behind.altitude);
       nextPoint.set(next.x, next.y, next.z); previousPoint.set(previous.x, previous.y, previous.z);
@@ -427,7 +435,8 @@ export default function OutbreakGlobe() {
       // Tangent includes the altitude gradient: nose rises on climb and lowers on approach.
       target.copy(plane.position).add(direction);
       plane.lookAt(target); plane.rotateY(Math.PI);
-      // Damped attitude follows the route without an artificial side-to-side roll.
+      plane.rotateZ(position.bank);
+      // Bank into the actual terminal turn, then smoothly level the wings in cruise.
       if (!lastFrame) attitude.copy(plane.quaternion);
       else attitude.slerp(plane.quaternion, 1 - Math.exp(-10 * Math.min((time - lastFrame) / 1000, 0.1)));
       plane.quaternion.copy(attitude); lastFrame = time;
@@ -439,10 +448,11 @@ export default function OutbreakGlobe() {
         trailPositions.set([point.x, point.y, point.z], i * 3);
       }
       trailGeo.attributes.position.needsUpdate = true;
-      // Follow the plane before descending to a country-sized view.
+      // Track the cruise line so the terminal curve remains visible on the globe.
       const altitude = t < 0.28 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t / 0.28)
         : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.68) / 0.32);
-      gpu.pointOfView({ lat: position.lat, lng: position.lng, altitude }, 0);
+      const cameraCentre = interpolateFlightPosition(nextFlight.from, nextFlight.to, position.progress);
+      gpu.pointOfView({ ...cameraCentre, altitude }, 0);
       // Keep a readable model size without engulfing small countries on approach.
       const camera = gpu.camera() as THREE.PerspectiveCamera;
       const viewHeight = Math.max(1, mapContainer.current?.clientHeight || windowHeight);
@@ -453,7 +463,7 @@ export default function OutbreakGlobe() {
         const bounds = mapContainer.current.getBoundingClientRect();
         Object.assign(mapContainer.current.dataset, {
           flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
-          flightFrom: originName, flightTo: name, flightPhase: position.phase,
+          flightFrom: originName, flightTo: name, flightPhase: position.phase, flightBank: position.bank.toFixed(4),
           flightLatitude: position.lat.toFixed(6), flightLongitude: position.lng.toFixed(6),
           flightVisible: String(Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1 && projected.z < 1),
           flightX: ((projected.x + 1) / 2 * bounds.width).toFixed(2),
@@ -474,7 +484,6 @@ export default function OutbreakGlobe() {
     autoTourEnabledRef.current = autoTourEnabled;
   }, [autoTourEnabled]);
 
-  const tourIntervalRef = useRef<any>(null);
   const tourMosquitoOrder: MosquitoType[] = ["aedes", "anopheles", "culex"];
   const tourMosquitoIndexRef = useRef(0);
   const tourCountryIndexRef = useRef(0);
@@ -485,7 +494,6 @@ export default function OutbreakGlobe() {
   // 2. Handle Tour Loop
   useEffect(() => {
     if (!autoTourEnabled || !rendererReady || geoJsonData.length === 0) {
-      if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
       // When user interrupts tour, reset rotation (unless they are interacting with a country)
       if (!autoTourEnabled && globeEl.current && !activeCountry && !flightRef.current) {
         globeEl.current.controls().autoRotate = false;
@@ -530,13 +538,13 @@ export default function OutbreakGlobe() {
 
     // First time entering tour => start at aedes
     tourMosquitoIndexRef.current = 0;
+    const stops = createAutopilotStops(nextTourStep);
+    tourStopsRef.current = stops;
     startTourCycle();
-    
-    // Allow up to 9.4s of flight, then time to read the destination.
-    tourIntervalRef.current = setInterval(nextTourStep, 15000);
 
     return () => {
-      if (tourIntervalRef.current) clearInterval(tourIntervalRef.current);
+      stops.stop();
+      if (tourStopsRef.current === stops) tourStopsRef.current = null;
     };
   }, [autoTourEnabled, geoJsonData, rendererReady]);
 
@@ -590,7 +598,7 @@ export default function OutbreakGlobe() {
           !f?.properties || !f?.geometry || !Array.isArray(f.geometry.coordinates)
         )) throw new Error("Invalid country data");
         // Interior rings include sovereign enclaves such as Lesotho. Preserve them.
-        setGeoJsonData(data.features);
+        setGeoJsonData(data.features.map(prepareCountryGeometry));
         setGeoJsonStatus("ready");
       })
       .catch(() => {
@@ -680,7 +688,7 @@ export default function OutbreakGlobe() {
     controls.autoRotateSpeed = 0.15;
     controls.enableZoom = true;
     controls.minDistance = 101.5;
-    controls.maxDistance = 700;
+    controls.maxDistance = 1600;
     controls.zoomSpeed = 0.8;
     const handleControlStart = () => {
       cancelFlight();
@@ -734,7 +742,7 @@ export default function OutbreakGlobe() {
     cancelFlight(); setAutoTourEnabled(false);
     const pov = globeEl.current.pointOfView();
     globeEl.current.controls().autoRotate = false;
-    globeEl.current.pointOfView({ ...pov, altitude: Math.max(0.015, Math.min(6, pov.altitude * factor)) }, 180);
+    globeEl.current.pointOfView({ ...pov, altitude: Math.max(0.015, Math.min(15, pov.altitude * factor)) }, 180);
   };
 
   if (!mounted) return null;
@@ -771,7 +779,8 @@ export default function OutbreakGlobe() {
           // Polygons (Red, Orange, Yellow)
           polygonsTransitionDuration={0}
           polygonsData={countries}
-          polygonAltitude={0.005}
+          polygonAltitude={COUNTRY_ALTITUDE}
+          polygonCapCurvatureResolution={COUNTRY_CAP_RESOLUTION}
           polygonCapColor={getPolygonColor}
           polygonSideColor={getPolygonColor}
           polygonStrokeColor={getPolygonStrokeColor}

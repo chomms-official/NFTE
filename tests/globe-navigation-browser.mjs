@@ -53,6 +53,30 @@ for (const disabled of [true, false]) {
       releaseTexture();
     }
     await page.waitForLoadState('networkidle');
+    // An integration check for the transition from landing to the next departure.
+    // Start in the air so the first measured stop is observed in full.
+    await page.getByTestId('globe-flight').waitFor({ timeout: 20000 });
+    const tourStops = await page.evaluate(async () => {
+      const stops = [];
+      const deadline = performance.now() + 45000;
+      let arrival;
+      while (stops.length < 2 && performance.now() < deadline) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const country = document.querySelector('[data-testid="country-details"] h2')?.textContent.trim();
+        const flight = document.querySelector('[data-testid="globe-flight"]')?.textContent;
+        if (country && !arrival) arrival = { country, time: performance.now() };
+        if (flight && arrival) {
+          stops.push({ country: arrival.country, flight, dwell: performance.now() - arrival.time });
+          arrival = undefined;
+        }
+      }
+      return stops;
+    });
+    assert.equal(tourStops.length, 2, 'Autopilot must continue across consecutive arrivals');
+    for (const { country, flight, dwell } of tourStops) {
+      assert.ok(flight.includes(`${country} →`), `Each flight must leave the last stop: ${flight}`);
+      assert.ok(dwell > 4500 && dwell < 6000, `Expected a five-second visible stop in ${country}, got ${dwell} ms`);
+    }
     await stop(page);
     await page.getByRole('button', { name: 'Reset globe view', exact: true }).click();
     await selected(page, 'Belgium');
@@ -113,7 +137,13 @@ for (const disabled of [true, false]) {
     await page.getByRole('button', { name: 'Close country details' }).click();
     await selected(page,'Brazil');
     const brazil = +(await page.locator(flightTarget).getAttribute(disabled ? 'data-zoom' : 'data-altitude'));
-    assert.ok(disabled ? belgium > brazil * 5 : belgium < brazil / 5, `Country fit must depend on country size: ${belgium}/${brazil}`);
+    assert.ok(Math.abs(belgium - brazil) < 0.01, `Both countries must keep the same overview: ${belgium}/${brazil}`);
+    const { width, height } = await canvas(page).boundingBox();
+    const globeDiameter = disabled
+      ? 2 * brazil * Math.min(width * 0.43, height * 0.35)
+      : height / (Math.tan(25 * Math.PI / 180) * Math.sqrt((1 + brazil) ** 2 - 1));
+    assert.ok(Math.abs(globeDiameter / Math.min(width, height) - 0.86) < 0.01,
+      'The horizon must be visible beside the country details');
     await page.getByRole('button', { name: 'Close country details' }).click();
     await page.selectOption('#country-select', 'Japan');
     await page.selectOption('#country-select', 'France');
