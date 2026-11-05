@@ -5,7 +5,7 @@ import { geoGraticule10, geoPath } from "d3-geo";
 import type { Feature, Geometry } from "geojson";
 import { countryName, type CountryFeature } from "@/lib/simulator";
 import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe } from "@/lib/software-globe-projection";
-import { flightSample, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { flightSample, flightRouteSample, interpolateFlightPosition, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 
 import { drawSoftwareAirliner } from "@/lib/airliner";
 
@@ -159,8 +159,8 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         ctx.strokeStyle = "rgba(240,246,255,0.35)"; ctx.lineWidth = 1.2;
         ctx.shadowColor = "#8bcbff"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
         const position = flightSample(flight, progress);
-        const future = flightSample(flight, Math.min(1, progress + 0.003));
-        const past = flightSample(flight, Math.max(0, progress - 0.003));
+        const future = flightRouteSample(flight, Math.min(1, position.progress + 0.0001));
+        const past = flightRouteSample(flight, Math.max(0, position.progress - 0.0001));
         const projected = projection([position.lng, position.lat]);
         const ahead = projection([future.lng, future.lat]);
         const behind = projection([past.lng, past.lat]);
@@ -172,6 +172,7 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
           canvas.dataset.flightX = projected[0].toFixed(2); canvas.dataset.flightY = (projected[1] - lift).toFixed(2);
           canvas.dataset.flightLatitude = position.lat.toFixed(6); canvas.dataset.flightLongitude = position.lng.toFixed(6);
           canvas.dataset.flightPhase = position.phase;
+          canvas.dataset.flightBank = position.bank.toFixed(4);
           ctx.save(); ctx.translate(projected[0], projected[1] - lift); ctx.rotate(angle);
           const size = width < 600 ? 0.42 : 0.50; ctx.scale(size,size);
           drawSoftwareAirliner(ctx, position.bank);
@@ -282,7 +283,8 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         if (flight) {
           const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
           const position = flightSample(flight, t);
-          rotation = [-position.lng, -position.lat, 0];
+          const cameraCentre = interpolateFlightPosition(flight.from, flight.to, position.progress);
+          rotation = [-cameraCentre.lng, -cameraCentre.lat, 0];
           const smooth = smoothFlightStep;
           const cruise = Math.min(1.2, flightStartZoom);
           zoom = t < 0.28 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t / 0.28)

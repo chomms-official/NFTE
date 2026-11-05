@@ -33,4 +33,10 @@ Refresh World Bank data manually with `python scripts/import-country-data.py`, o
 
 `npm run build` runs Next.js and then `scripts/build-offline.mjs`. The script generates exact HTML snapshots and a service worker containing SHA-256 hashes of every required asset. Generated artifacts are ignored by git and regenerated on deployment. `next dev` deliberately does not install the production worker.
 
-Both renderers share a great-circle route, smooth acceleration/cruise/deceleration and a low climb/descent profile. The plane is substantially smaller (about 32 desktop pixels / 26 mobile pixels in WebGL at the target view). Attitude follows the route tangent with damped orientation, without artificial side-to-side rolling. A country change departs from the previous reached selection; rapid new choices queue the latest next destination. Flight duration remains a visual demonstration, not a real travel-time estimate.
+Both renderers use curved departures and approaches around a great-circle cruise. The airliner climbs, banks into each turn by up to 25 degrees, levels its wings during cruise and descends on approach. The camera tracks the cruise line so the terminal turns stay visible. The plane occupies about 32 pixels on desktop and 26 pixels on mobile in WebGL. Each flight departs from the last country reached. Selecting another country in flight queues the latest destination.
+
+Autopilot waits **5 seconds after arrival** at each country, then starts the next flight. Flight duration is additional to that stop. Manual selection, dragging, zooming, reset or stopping autopilot cancels the pending stop. Reduced-motion selection still gets the full five-second stop.
+
+Country selection keeps the entire globe visible, with its diameter occupying 86% of the shorter map viewport dimension. The same framing applies after flights and when the detail panel resizes. Players can still zoom manually.
+
+Two-degree polygon tessellation keeps Greenland's surface above the earth texture. Removing the retraced line from the antimeridian to the South Pole preserves Antarctica's coastline and area. Geometry tests check the triangles of both polar meshes, cast rays into their interiors and verify that country holes such as Lesotho stay intact.

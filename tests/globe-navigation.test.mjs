@@ -46,13 +46,14 @@ test('headings follow the nose forward along the route, including a date-line cr
   assert.ok(Math.abs(helpers.flightBearing({ lat: 0, lng: -170 }, { lat: 0, lng: 170 }, 1) - 270) < 1e-7);
 });
 
-test('small countries zoom closer than large countries without losing their geographic centre', () => {
+test('country selection keeps the same overview for small and large countries', () => {
   const thailand = helpers.countryFraming(country('Thailand'));
   const belgium = helpers.countryFraming(country('Belgium'));
   const brazil = helpers.countryFraming(country('Brazil'));
-  assert.ok(belgium.softwareZoom > thailand.softwareZoom * 4);
-  assert.ok(thailand.softwareZoom > brazil.softwareZoom * 2);
-  assert.ok(belgium.webglAltitude < thailand.webglAltitude && thailand.webglAltitude < brazil.webglAltitude);
+  assert.equal(belgium.softwareZoom, thailand.softwareZoom);
+  assert.equal(thailand.softwareZoom, brazil.softwareZoom);
+  assert.equal(belgium.webglAltitude, brazil.webglAltitude);
+  assert.ok(thailand.webglAltitude > 1.6 && thailand.webglAltitude < 1.8);
   assert.ok(Math.abs(thailand.center.lat - 15) < 1 && Math.abs(thailand.center.lng - 101) < 1);
   assert.ok(Math.abs(brazil.center.lat + 11) < 2 && Math.abs(brazil.center.lng + 53) < 2);
 });
@@ -80,7 +81,7 @@ test('archipelagos frame all their nearby islands, including Fiji across the dat
         const distance = geoDistance(pair(frame.center), point);
         assert.ok(distance < Math.PI / 2, `${name}: every island must be in the visible hemisphere`);
         const [x, y] = projection(point);
-        assert.ok(Math.hypot(x, y) <= Math.min(aspect, 1) * 0.351,
+        assert.ok(Math.hypot(x, y) <= Math.min(aspect, 1) * 0.431,
           `${name}: every island must fit the selected-country viewport`);
       }
     }
@@ -101,12 +102,12 @@ test('every country fits its largest land polygon in the software viewport witho
       const frame = helpers.countryFraming(feature, aspect);
       assert.ok(Object.values(frame.center).every(Number.isFinite));
       assert.ok(frame.softwareZoom >= 0.65 && frame.softwareZoom <= 80);
-      assert.ok(frame.webglAltitude >= 0.012 && frame.webglAltitude <= 6);
+      assert.ok(frame.webglAltitude >= 1.6 && frame.webglAltitude <= 15);
       const projection = geoOrthographic().rotate([-frame.center.lng, -frame.center.lat, 0])
         .translate([0, 0]).scale(Math.min(aspect * 0.43, 0.35) * frame.softwareZoom);
       for (const ring of mainland.coordinates) for (const point of ring) {
         const [x, y] = projection(point);
-        assert.ok(Math.hypot(x, y) <= Math.min(aspect, 1) * 0.351,
+        assert.ok(Math.hypot(x, y) <= Math.min(aspect, 1) * 0.431,
           `${feature.properties.ADMIN} must fit the visible map at aspect ${aspect}`);
       }
     }
@@ -156,7 +157,7 @@ test('flight timing accelerates smoothly, cruises steadily and decelerates into 
     const next=helpers.flightSample(route,i/1000);
     assert.ok(next.progress>previous.progress);
     assert.ok(next.altitude>=0.009 && next.altitude<=0.054000001);
-    assert.ok(Math.abs(next.bank)<=0.09);
+    assert.ok(Math.abs(next.bank)<=25*Math.PI/180);
     previous=next;
   }
   const advance=t=>helpers.flightSample(route,t+0.001).progress-helpers.flightSample(route,t).progress;
@@ -185,4 +186,63 @@ test('short routes climb gently and every route has stable endpoint tangents', (
   const near=helpers.flightDuration({lat:50,lng:4},{lat:51,lng:5});
   const far=helpers.flightDuration({lat:50,lng:4},{lat:-50,lng:-176});
   assert.ok(near<far && near>=5200 && far<=9400);
+});
+
+test('selected-country views keep the entire horizon inside desktop, mobile and tablet viewports', () => {
+  for (const aspect of [0.3, 0.35, 0.75, 1, 1.35, 2]) {
+    const frame = helpers.countryFraming(country('Cambodia'), aspect);
+    const radius = Math.min(aspect * 0.43, 0.35) * frame.softwareZoom;
+    assert.ok(Math.abs(radius / Math.min(aspect, 1) - 0.43) < 1e-12);
+    const distance = 1 + frame.webglAltitude;
+    const silhouette = 1 / (Math.tan(25 * Math.PI / 180) * Math.sqrt(distance ** 2 - 1));
+    assert.ok(Math.abs(silhouette / Math.min(aspect, 1) - 0.86) < 1e-12);
+  }
+});
+
+test('departure and arrival bend off the cruise line, meet it smoothly and level their wings', () => {
+  for (const route of [
+    {from:{lat:15,lng:101},to:{lat:36,lng:138}},
+    {from:{lat:50,lng:4},to:{lat:51,lng:5}},
+    {from:{lat:15,lng:170},to:{lat:15,lng:-170}},
+    {from:{lat:0,lng:0},to:{lat:0,lng:180}},
+    {from:{lat:90,lng:0},to:{lat:-90,lng:0}},
+  ]) {
+    for (const p of [0.1, 0.9]) {
+      const curved=helpers.flightRouteSample(route,p), straight=helpers.interpolateFlightPosition(route.from,route.to,p);
+      assert.ok(geoDistance(pair(curved),pair(straight))>0.0001,'terminal turns must change the actual position');
+    }
+    for (const p of [0,0.28,0.5,0.72,1]) {
+      const curved=helpers.flightRouteSample(route,p), straight=helpers.interpolateFlightPosition(route.from,route.to,p);
+      assert.ok(geoDistance(pair(curved),pair(straight))<1e-9);
+      assert.ok(Math.abs(curved.bank)<1e-9);
+    }
+    for (const p of [0.28,0.72]) {
+      const a=helpers.flightRouteSample(route,p-1e-7), b=helpers.flightRouteSample(route,p+1e-7);
+      assert.ok(Math.abs(a.bank-b.bank)<0.0001,'roll must not snap at the cruise join');
+    }
+    let previous=helpers.flightRouteSample(route,0), travelled=0;
+    for(let i=1;i<=500;i++) {
+      const sample=helpers.flightRouteSample(route,i/500);
+      assert.ok(Object.values(sample).every(Number.isFinite));
+      assert.ok(Math.abs(sample.bank)<=25*Math.PI/180);
+      travelled+=geoDistance(pair(previous),pair(sample));previous=sample;
+    }
+    assert.ok(travelled<geoDistance(pair(route.from),pair(route.to))*1.06,'no loops or sideways teleporting');
+  }
+  const same={from:{lat:15,lng:101},to:{lat:15,lng:101}};
+  assert.equal(helpers.flightRouteSample(same,0.1).bank,0);
+});
+
+test('bank direction agrees with the actual spherical turn, rather than a decorative oscillation', () => {
+  const vec = p => {const lat=p.lat*Math.PI/180,lng=p.lng*Math.PI/180;return [Math.cos(lat)*Math.cos(lng),Math.cos(lat)*Math.sin(lng),Math.sin(lat)];};
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a.reduce((sum,x,i)=>sum+x*b[i],0);
+  const subtract=(a,b)=>a.map((x,i)=>x-b[i]);
+  const route={from:{lat:15,lng:101},to:{lat:36,lng:138}};
+  for(const p of [0.03,0.08,0.14,0.20,0.25,0.75,0.8,0.86,0.92,0.97]) {
+    const sample=helpers.flightRouteSample(route,p), a=vec(helpers.flightRouteSample(route,p-.0001));
+    const b=vec(sample),c=vec(helpers.flightRouteSample(route,p+.0001));
+    const steering=dot(b,cross(subtract(b,a),subtract(c,b)));
+    assert.equal(Math.sign(sample.bank),Math.sign(steering),`bank must lean into the turn at ${p}`);
+  }
 });
