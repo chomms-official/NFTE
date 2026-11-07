@@ -12,6 +12,9 @@ export type GlobeFlight = {
   zoom: number;
 };
 
+// Even at the ends of the arch the plane is flying above the country.
+export const FLIGHT_CLEARANCE = 0.075;
+
 export const smoothFlightStep = (value: number) => {
   const t = Math.max(0, Math.min(1, value));
   return Math.max(0, Math.min(1, t * t * t * (t * (t * 6 - 15) + 10)));
@@ -31,7 +34,8 @@ export function flightSample(flight: Pick<GlobeFlight, "from" | "to">, elapsed: 
   const progress = t < ramp ? ramp * integral(t / ramp) / (1 - ramp)
     : t > 1 - ramp ? 1 - ramp * integral((1 - t) / ramp) / (1 - ramp)
       : (t - ramp / 2) / (1 - ramp);
-  return { ...flightRouteSample(flight, progress),
+  const opacity = smoothFlightStep(t / 0.08) * smoothFlightStep((1 - t) / 0.08);
+  return { ...flightRouteSample(flight, progress), opacity,
     phase: t < 0.24 ? "Climbing" : t < 0.72 ? "Cruising" : "Descending" };
 }
 
@@ -56,8 +60,11 @@ export function flightRouteSample(flight: Pick<GlobeFlight, "from" | "to">, valu
   const distance = geoDistance(pair(from), pair(to));
   const base = interpolateFlightPosition(from, to, progress);
   const lift = Math.min(0.38, distance * 0.32);
-  const altitude = 0.009 + lift * 4 * progress * (1 - progress);
-  return { ...base, progress, altitude, bank: 0 };
+  const altitude = FLIGHT_CLEARANCE + lift * 4 * progress * (1 - progress);
+  const slope = Math.atan2(4 * lift * (1 - 2 * progress), distance * (1 + altitude));
+  const levelEnds = smoothFlightStep(progress / 0.16) * smoothFlightStep((1 - progress) / 0.16);
+  const pitch = clamp(slope, -6 * radians, 6 * radians) * levelEnds;
+  return { ...base, progress, altitude, pitch, bank: 0 };
 }
 
 export const FLIGHT_TRAIL_SEGMENTS = 128;

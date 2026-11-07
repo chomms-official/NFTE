@@ -99,21 +99,23 @@ for (const disabled of [true, false]) {
     assert.equal(position.bank, 0, 'Aircraft must keep level wings');
     assert.ok(position.altitude > .1, 'The flight must visibly arch above the globe');
     assert.ok(position.trail > 30, 'The trail must retain the flown route from the departure');
-    const buffer = await canvas(page).screenshot();
+    const plane = page.getByTestId('flight-aircraft');
+    await plane.waitFor({state:'visible'});
+    const buffer = await plane.screenshot();
     await fs.writeFile(`${artifacts}/airplane-${mode}.png`, buffer);
-    const { data, info } = await sharp(buffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-    const bounds = await canvas(page).boundingBox();
-    const scale = info.width / bounds.width;
-    let white = 0, red = 0;
-    for (let y = Math.max(0, Math.floor((position.y-40)*scale)); y < Math.min(info.height,(position.y+40)*scale); y++) {
-      for (let x = Math.max(0,Math.floor((position.x-40)*scale)); x < Math.min(info.width,(position.x+40)*scale); x++) {
-        const i = (y*info.width+x)*info.channels;
-        if (data[i] > 150 && data[i+1] > 150 && data[i+2] > 150) white++;
-        if (data[i] > 90 && data[i] > data[i+1]*1.7 && data[i] > data[i+2]*1.7) red++;
+    const color = await plane.evaluate(el => {
+      const pixels=el.getContext('2d').getImageData(0,0,el.width,el.height).data;
+      let silver=0, red=0;
+      for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]){
+        if(pixels[i]>150 && pixels[i+1]>150 && pixels[i+2]>150)silver++;
+        if(pixels[i]>90 && pixels[i]>pixels[i+1]*1.7 && pixels[i]>pixels[i+2]*1.7)red++;
       }
-    }
-    assert.ok(white > 10 && red > 2, `Aircraft needs visible white body and red tail/winglets, ${mode}: ${white}/${red}`);
+      return {silver,red,pointer:getComputedStyle(el).pointerEvents};
+    });
+    assert.ok(color.silver>10 && color.red>2, `3D airframe must have a lit fuselage and red tail: ${JSON.stringify(color)}`);
+    assert.equal(color.pointer,'none','the aircraft must never intercept controls underneath');
     await page.getByRole('heading', { name: 'Thailand', exact: true }).waitFor();
+    assert.equal(await plane.isVisible(), false, 'Arrival clears the foreground plane');
     assert.equal(await page.locator(flightTarget).getAttribute('data-trail-point-count'), '0', 'Arrival clears the complete trail');
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${artifacts}/country-${mode}-thailand.png` });
@@ -194,7 +196,7 @@ for (const disabled of [true, false]) {
     assert.equal(await details(page).count(),0,'Reset must close details and restore the world view in both renderers');
     assert.ok((await canvas(page).boundingBox()).height > 800);
     assert.deepEqual(errors,[]);
-    results.push({mode,aircraftPixels:{white,red},buttonPixels,wheelPixels,pinchPixels,countryFit:{belgium,brazil},cancelledFlight:true});
+    results.push({mode,aircraftPixels:{white:color.silver,red:color.red},buttonPixels,wheelPixels,pinchPixels,countryFit:{belgium,brazil},cancelledFlight:true});
     console.log(`PASS ${mode}: visible aircraft, country framing, buttons/wheel/pinch with open details, cancellation`);
     await context.close();
   } finally { await browser.close(); }

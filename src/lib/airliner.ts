@@ -62,32 +62,3 @@ export function createAirliner() {
   add("beacon",new THREE.SphereGeometry(0.08,8,6),beaconMaterial,0,0.59,0.7);
   return aircraft;
 }
-
-/** Matching shaded twinjet silhouette for machines without WebGL. */
-export function drawSoftwareAirliner(ctx: CanvasRenderingContext2D, bank: number) {
-  ctx.save(); ctx.scale(Math.cos(bank), 1);
-  ctx.shadowColor = "rgba(0,0,0,0.65)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
-  const polygon = (points: number[][], color: string) => {
-    ctx.fillStyle = color; ctx.beginPath(); points.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y)); ctx.closePath();ctx.fill();ctx.stroke();
-  };
-  ctx.strokeStyle = "#64748b"; ctx.lineWidth = 0.6;
-  for (const s of [-1,1]) {
-    ctx.fillStyle = "#e2e8f0"; ctx.beginPath(); ctx.roundRect(s*9-2,-5,4,11,2);ctx.fill();ctx.stroke();
-    ctx.fillStyle = "#172536";ctx.fillRect(s*9-1.5,-4,3,1.6);
-    polygon([[s*2,-9],[s*29,7],[s*29,11],[s*10,7],[s*2,6]],"#cbd5e1");
-    polygon([[s*1,17],[s*12,24],[s*12,27],[s*1,24]],"#dbe3ed");
-    ctx.fillStyle = "#ca263b"; ctx.fillRect(s*29-0.8,6,1.6,4.5);
-  }
-  const paint = ctx.createLinearGradient(-3,0,3,0);paint.addColorStop(0,"#94a3b8");paint.addColorStop(0.45,"#ffffff");paint.addColorStop(1,"#cbd5e1");
-  ctx.fillStyle = paint;ctx.beginPath();ctx.moveTo(0,-32);ctx.bezierCurveTo(4,-31,3,-21,3,13);
-  ctx.bezierCurveTo(3,20,1,28,0,30);ctx.bezierCurveTo(-1,28,-3,20,-3,13);ctx.bezierCurveTo(-3,-21,-4,-31,0,-32);ctx.fill();ctx.stroke();
-  ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-  polygon([[-2,-25],[2,-25],[2.5,-22],[-2.5,-22]],"#18344b");
-  ctx.fillStyle="#253c50";
-  for(let i=0;i<14;i++){ctx.fillRect(-2.8,-18+i*2.2,0.8,1);ctx.fillRect(2,-18+i*2.2,0.8,1);}
-  // The upright fin projects to the low-wing side as the aircraft rolls.
-  const finShift = -10 * Math.tan(bank);
-  polygon([[0,14],[2 + finShift,25],[finShift,29],[-1,24]],"#c92336");
-  for(const s of [-1,1]){ctx.fillStyle=s<0?"#ff354f":"#43ffb0";ctx.beginPath();ctx.arc(s*29,7,1.2,0,Math.PI*2);ctx.fill();}
-  ctx.restore();
-}
