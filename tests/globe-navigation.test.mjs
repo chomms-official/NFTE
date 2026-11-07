@@ -156,8 +156,8 @@ test('flight timing accelerates smoothly, cruises steadily and decelerates into 
   for(let i=1;i<=1000;i++) {
     const next=helpers.flightSample(route,i/1000);
     assert.ok(next.progress>previous.progress);
-    assert.ok(next.altitude>=0.009 && next.altitude<=0.054000001);
-    assert.ok(Math.abs(next.bank)<=25*Math.PI/180);
+    assert.ok(next.altitude>=0.009 && next.altitude<=0.389000001);
+    assert.equal(next.bank,0);
     previous=next;
   }
   const advance=t=>helpers.flightSample(route,t+0.001).progress-helpers.flightSample(route,t).progress;
@@ -168,7 +168,7 @@ test('flight timing accelerates smoothly, cruises steadily and decelerates into 
   assert.equal(helpers.flightSample(route,0.9).phase,'Descending');
 });
 
-test('short routes climb gently and every route has stable endpoint tangents', () => {
+test('parabolic routes have finite climb and descent tangents', () => {
   for(const route of [
     {from:{lat:50,lng:4},to:{lat:51,lng:5}},
     {from:{lat:0,lng:170},to:{lat:0,lng:-170}},
@@ -180,7 +180,7 @@ test('short routes climb gently and every route has stable endpoint tangents', (
       const a=helpers.flightSample(route,Math.max(0,t-0.002));
       const b=helpers.flightSample(route,Math.min(1,t+0.002));
       const pitch=Math.atan2(b.altitude-a.altitude, distance*(b.progress-a.progress));
-      assert.ok(Number.isFinite(pitch) && Math.abs(pitch)<0.18, `Pitch should remain airliner-like: ${pitch}`);
+      assert.ok(Number.isFinite(pitch) && Math.abs(pitch)<0.91, `Climb and descent must stay finite: ${pitch}`);
     }
   }
   const near=helpers.flightDuration({lat:50,lng:4},{lat:51,lng:5});
@@ -199,7 +199,7 @@ test('selected-country views keep the entire horizon inside desktop, mobile and 
   }
 });
 
-test('departure and arrival bend off the cruise line, meet it smoothly and level their wings', () => {
+test('flights rise in one symmetric parabola, descend exactly to the destination and never bank', () => {
   for (const route of [
     {from:{lat:15,lng:101},to:{lat:36,lng:138}},
     {from:{lat:50,lng:4},to:{lat:51,lng:5}},
@@ -207,42 +207,57 @@ test('departure and arrival bend off the cruise line, meet it smoothly and level
     {from:{lat:0,lng:0},to:{lat:0,lng:180}},
     {from:{lat:90,lng:0},to:{lat:-90,lng:0}},
   ]) {
-    for (const p of [0.1, 0.9]) {
-      const curved=helpers.flightRouteSample(route,p), straight=helpers.interpolateFlightPosition(route.from,route.to,p);
-      assert.ok(geoDistance(pair(curved),pair(straight))>0.0001,'terminal turns must change the actual position');
-    }
-    for (const p of [0,0.28,0.5,0.72,1]) {
-      const curved=helpers.flightRouteSample(route,p), straight=helpers.interpolateFlightPosition(route.from,route.to,p);
-      assert.ok(geoDistance(pair(curved),pair(straight))<1e-9);
-      assert.ok(Math.abs(curved.bank)<1e-9);
-    }
-    for (const p of [0.28,0.72]) {
-      const a=helpers.flightRouteSample(route,p-1e-7), b=helpers.flightRouteSample(route,p+1e-7);
-      assert.ok(Math.abs(a.bank-b.bank)<0.0001,'roll must not snap at the cruise join');
-    }
-    let previous=helpers.flightRouteSample(route,0), travelled=0;
-    for(let i=1;i<=500;i++) {
-      const sample=helpers.flightRouteSample(route,i/500);
+    const peak=helpers.flightRouteSample(route,0.5).altitude;
+    assert.ok(peak>0.009 && peak<=0.389);
+    let previous=helpers.flightRouteSample(route,0);
+    for (let i=1;i<=128;i++) {
+      const p=i/128, sample=helpers.flightRouteSample(route,p);
+      const ground=helpers.interpolateFlightPosition(route.from,route.to,p);
       assert.ok(Object.values(sample).every(Number.isFinite));
-      assert.ok(Math.abs(sample.bank)<=25*Math.PI/180);
-      travelled+=geoDistance(pair(previous),pair(sample));previous=sample;
+      assert.ok(geoDistance(pair(sample),pair(ground))<1e-10,'no lateral turns');
+      assert.equal(sample.bank,0);
+      assert.ok(p<=0.5 ? sample.altitude>previous.altitude : sample.altitude<previous.altitude);
+      assert.ok(Math.abs(sample.altitude-helpers.flightRouteSample(route,1-p).altitude)<1e-12);
+      previous=sample;
     }
-    assert.ok(travelled<geoDistance(pair(route.from),pair(route.to))*1.06,'no loops or sideways teleporting');
+    const quarter=helpers.flightRouteSample(route,0.25);
+    assert.ok(Math.abs((quarter.altitude-.009)/(peak-.009)-.75)<1e-12,'quadratic arch');
+    assert.equal(previous.altitude,0.009);
   }
   const same={from:{lat:15,lng:101},to:{lat:15,lng:101}};
-  assert.equal(helpers.flightRouteSample(same,0.1).bank,0);
+  assert.equal(helpers.flightRouteSample(same,.5).altitude,.009);
 });
 
-test('bank direction agrees with the actual spherical turn, rather than a decorative oscillation', () => {
-  const vec = p => {const lat=p.lat*Math.PI/180,lng=p.lng*Math.PI/180;return [Math.cos(lat)*Math.cos(lng),Math.cos(lat)*Math.sin(lng),Math.sin(lat)];};
-  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-  const dot=(a,b)=>a.reduce((sum,x,i)=>sum+x*b[i],0);
-  const subtract=(a,b)=>a.map((x,i)=>x-b[i]);
-  const route={from:{lat:15,lng:101},to:{lat:36,lng:138}};
-  for(const p of [0.03,0.08,0.14,0.20,0.25,0.75,0.8,0.86,0.92,0.97]) {
-    const sample=helpers.flightRouteSample(route,p), a=vec(helpers.flightRouteSample(route,p-.0001));
-    const b=vec(sample),c=vec(helpers.flightRouteSample(route,p+.0001));
-    const steering=dot(b,cross(subtract(b,a),subtract(c,b)));
-    assert.equal(Math.sign(sample.bank),Math.sign(steering),`bank must lean into the turn at ${p}`);
+test('dashed trails retain the origin and flown path, meet the plane and clear at landing', () => {
+  const route={from:{lat:15,lng:170},to:{lat:36,lng:-138}};
+  let previous=[];
+  for(const p of [.001,.2,.5,.8,.999999]) {
+    const trail=helpers.flightTrailSamples(route,p);
+    assert.ok(trail.length>previous.length && trail.length<=helpers.FLIGHT_TRAIL_SEGMENTS+1);
+    assert.deepEqual(trail[0],helpers.flightRouteSample(route,0));
+    assert.deepEqual(trail.at(-1),helpers.flightRouteSample(route,p));
+    for(let i=0;i<previous.length-1;i++)assert.deepEqual(trail[i],previous[i],'old samples stay anchored');
+    previous=trail;
+  }
+  for(const p of [-1,0,1,2,NaN,Infinity])assert.deepEqual(helpers.flightTrailSamples(route,p),[]);
+});
+
+test('flight camera reveals altitude and returns exactly to both countries without polar singularities', () => {
+  for(const route of [
+    {from:{lat:15,lng:101},to:{lat:36,lng:138}},
+    {from:{lat:90,lng:0},to:{lat:-90,lng:0}},
+    {from:{lat:0,lng:0},to:{lat:0,lng:180}},
+    {from:{lat:12,lng:80},to:{lat:12,lng:80}},
+  ]) {
+    for(const p of [0,.001,.1,.3,.5,.7,.9,.999,1]) {
+      const camera=helpers.flightCameraSample(route,p);
+      assert.ok(Object.values(camera).every(Number.isFinite));
+    }
+    for(const p of [0,1])assert.deepEqual(helpers.flightCameraSample(route,p),helpers.interpolateFlightPosition(route.from,route.to,p));
+    const distance=geoDistance(pair(route.from),pair(route.to));
+    if(distance>0) {
+      const angle=geoDistance(pair(helpers.flightCameraSample(route,.5)),pair(helpers.flightRouteSample(route,.5)));
+      assert.ok(Math.abs(angle-55*Math.PI/180)<1e-9,'view must show the raised arch from the side');
+    }
   }
 });

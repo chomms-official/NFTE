@@ -15,6 +15,17 @@ export function isVisibleOnGlobe(projection: GeoProjection, location: [number, n
   return !!centre && geoDistance(centre, location) <= Math.PI / 2;
 }
 
+/** Project the same radial altitude as WebGL, including points beyond the limb. */
+export function projectElevatedPoint(projection: GeoProjection, location: [number, number], altitude: number): [number, number] | null {
+  const surface = projection(location);
+  const centre = projection.invert?.(projection.translate());
+  if (!surface || !centre) return null;
+  const [cx, cy] = projection.translate();
+  const x = (surface[0] - cx) * (1 + altitude), y = (surface[1] - cy) * (1 + altitude);
+  if (geoDistance(centre, location) > Math.PI / 2 && Math.hypot(x, y) <= projection.scale()) return null;
+  return [cx + x, cy + y];
+}
+
 /** Guard the circle before inversion: the rear hemisphere is never clickable. */
 export function countryAtGlobePoint(
   projection: GeoProjection,

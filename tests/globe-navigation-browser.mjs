@@ -92,7 +92,13 @@ for (const disabled of [true, false]) {
       const d = document.querySelector(selector)?.dataset;
       return d?.flightVisible === 'true' && Number(d.flightProgress) > .32 && Number(d.flightProgress) < .8;
     }, flightTarget);
-    const position = await page.locator(flightTarget).evaluate(el => ({ x: +el.dataset.flightX, y: +el.dataset.flightY }));
+    const position = await page.locator(flightTarget).evaluate(el => ({
+      x: +el.dataset.flightX, y: +el.dataset.flightY,
+      bank: +el.dataset.flightBank, altitude: +el.dataset.flightAltitude, trail: +el.dataset.trailPointCount,
+    }));
+    assert.equal(position.bank, 0, 'Aircraft must keep level wings');
+    assert.ok(position.altitude > .1, 'The flight must visibly arch above the globe');
+    assert.ok(position.trail > 30, 'The trail must retain the flown route from the departure');
     const buffer = await canvas(page).screenshot();
     await fs.writeFile(`${artifacts}/airplane-${mode}.png`, buffer);
     const { data, info } = await sharp(buffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -108,6 +114,7 @@ for (const disabled of [true, false]) {
     }
     assert.ok(white > 10 && red > 2, `Aircraft needs visible white body and red tail/winglets, ${mode}: ${white}/${red}`);
     await page.getByRole('heading', { name: 'Thailand', exact: true }).waitFor();
+    assert.equal(await page.locator(flightTarget).getAttribute('data-trail-point-count'), '0', 'Arrival clears the complete trail');
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${artifacts}/country-${mode}-thailand.png` });
     const mapBounds = await canvas(page).boundingBox(), panel = await details(page).boundingBox();
