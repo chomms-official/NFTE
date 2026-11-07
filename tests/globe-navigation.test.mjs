@@ -151,12 +151,12 @@ test('flight timing accelerates smoothly, cruises steadily and decelerates into 
   const start = helpers.flightSample(route,0), end = helpers.flightSample(route,1);
   assert.equal(start.lat,15);assert.equal(start.lng,101);
   assert.equal(end.lat,36);assert.equal(end.lng,138);
-  assert.equal(start.altitude,0.009);assert.equal(end.altitude,0.009);
+  assert.ok(start.altitude >= 0.07 && end.altitude === start.altitude);
   let previous = start;
   for(let i=1;i<=1000;i++) {
     const next=helpers.flightSample(route,i/1000);
     assert.ok(next.progress>previous.progress);
-    assert.ok(next.altitude>=0.009 && next.altitude<=0.389000001);
+    assert.ok(next.altitude>=start.altitude && next.altitude<=start.altitude+0.380000001);
     assert.equal(next.bank,0);
     previous=next;
   }
@@ -208,7 +208,8 @@ test('flights rise in one symmetric parabola, descend exactly to the destination
     {from:{lat:90,lng:0},to:{lat:-90,lng:0}},
   ]) {
     const peak=helpers.flightRouteSample(route,0.5).altitude;
-    assert.ok(peak>0.009 && peak<=0.389);
+    const floor=helpers.flightRouteSample(route,0).altitude;
+    assert.ok(floor >= 0.07 && peak>floor && peak<=floor+0.38);
     let previous=helpers.flightRouteSample(route,0);
     for (let i=1;i<=128;i++) {
       const p=i/128, sample=helpers.flightRouteSample(route,p);
@@ -221,11 +222,11 @@ test('flights rise in one symmetric parabola, descend exactly to the destination
       previous=sample;
     }
     const quarter=helpers.flightRouteSample(route,0.25);
-    assert.ok(Math.abs((quarter.altitude-.009)/(peak-.009)-.75)<1e-12,'quadratic arch');
-    assert.equal(previous.altitude,0.009);
+    assert.ok(Math.abs((quarter.altitude-floor)/(peak-floor)-.75)<1e-12,'quadratic arch');
+    assert.equal(previous.altitude,floor);
   }
   const same={from:{lat:15,lng:101},to:{lat:15,lng:101}};
-  assert.equal(helpers.flightRouteSample(same,.5).altitude,.009);
+  assert.equal(helpers.flightRouteSample(same,.5).altitude,helpers.FLIGHT_CLEARANCE);
 });
 
 test('dashed trails retain the origin and flown path, meet the plane and clear at landing', () => {
@@ -258,6 +259,20 @@ test('flight camera reveals altitude and returns exactly to both countries witho
     if(distance>0) {
       const angle=geoDistance(pair(helpers.flightCameraSample(route,.5)),pair(helpers.flightRouteSample(route,.5)));
       assert.ok(Math.abs(angle-55*Math.PI/180)<1e-9,'view must show the raised arch from the side');
+    }
+  }
+});
+
+test('takeoff and arrival fade above land with level noses and a bounded pitch', () => {
+  for (const [a,b] of [['Russia','Canada'],['Canada','Philippines'],['Belgium','Netherlands']]) {
+    const route={from:helpers.countryFraming(country(a)).center,to:helpers.countryFraming(country(b)).center};
+    for (let i=0;i<=100;i++) {
+      const p=i/100, point=helpers.flightSample(route,p);
+      assert.ok(point.altitude>=.07 && Math.abs(point.pitch)<=6*Math.PI/180+1e-12);
+      assert.ok(point.opacity>=0 && point.opacity<=1);
+      if(i===0||i===100){assert.equal(Math.abs(point.pitch),0);assert.equal(point.opacity,0);}
+      if(i>=8&&i<=92)assert.ok(point.opacity>.999);
+      if(i<=8||i>=92)assert.ok(Math.abs(point.pitch)<Math.PI/180,'nearly level throughout the fade');
     }
   }
 });

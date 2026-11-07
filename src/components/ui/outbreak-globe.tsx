@@ -10,7 +10,7 @@ import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
 import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
 
-import { countryFraming, flightDuration, flightSample, flightRouteSample, flightCameraSample, flightTrailSamples, FLIGHT_TRAIL_SEGMENTS, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { countryFraming, FLIGHT_CLEARANCE, flightDuration, flightSample, flightCameraSample, flightTrailSamples, FLIGHT_TRAIL_SEGMENTS, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 import { createAutopilotStops } from "@/lib/autopilot-stops";
 import { prepareCountryGeometry, COUNTRY_CAP_RESOLUTION, COUNTRY_ALTITUDE } from "@/lib/country-geometry";
 
@@ -23,7 +23,7 @@ const Globe = dynamic(() => import("react-globe.gl"), {
   ),
 });
 
-import { createAirliner } from "@/lib/airliner";
+import { AIRCRAFT_TILE, createAircraftPainter, earthOccludes, paintFlightFrame, type AircraftFrame } from "@/lib/flight-aircraft";
 
 type MosquitoType = "aedes" | "anopheles" | "culex";
 
@@ -301,12 +301,33 @@ export default function OutbreakGlobe() {
   const [simulationDate] = useState(() => Date.now());
   const [autoTourEnabled, setAutoTourEnabled] = useState(true);
   const autoTourEnabledRef = useRef(autoTourEnabled);
-  const airplaneMeshRef = useRef<THREE.Group | null>(null);
+  const aircraftCanvas = useRef<HTMLCanvasElement>(null);
+  const aircraftShadow = useRef<HTMLDivElement>(null);
+  const aircraftPainter = useRef<ReturnType<typeof createAircraftPainter> | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const tourStopsRef = useRef<ReturnType<typeof createAutopilotStops> | null>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
+
+  const showAircraft = useCallback((frame: AircraftFrame | null) => {
+    const canvas = aircraftCanvas.current, shadow = aircraftShadow.current;
+    if (!canvas || !shadow) return;
+    if (!frame || flightRef.current?.id !== frame.flight.id) {
+      canvas.hidden = true;
+      shadow.hidden = true;
+      return;
+    }
+    aircraftPainter.current ??= createAircraftPainter();
+    paintFlightFrame(canvas, aircraftPainter.current, frame, window.innerWidth < 600);
+    const rise = frame.point.altitude - FLIGHT_CLEARANCE;
+    const opacity = frame.point.opacity * 0.32 * Math.max(0, 1 - rise / 0.23);
+    shadow.hidden = !frame.shadow || opacity <= 0;
+    if (frame.shadow && opacity > 0) {
+      shadow.style.opacity = String(opacity);
+      shadow.style.transform = `translate3d(${frame.shadow[0] - 6}px,${frame.shadow[1] + 1}px,0)`;
+    }
+  }, []);
 
   const cancelFlight = useCallback(() => {
     tourStopsRef.current?.depart();
@@ -323,14 +344,14 @@ export default function OutbreakGlobe() {
       delete mapContainer.current.dataset.flightId;
       delete mapContainer.current.dataset.flightProgress;
     }
-    airplaneMeshRef.current?.removeFromParent();
+    showAircraft(null);
     if (trailLineRef.current) {
       trailLineRef.current.removeFromParent();
       trailLineRef.current.geometry.dispose();
       (trailLineRef.current.material as THREE.Material).dispose();
       trailLineRef.current = null;
     }
-  }, []);
+  }, [showAircraft]);
 
   const attachGlobe = useMemo(() => ({
     get current() { return globeEl.current; },
@@ -402,10 +423,6 @@ export default function OutbreakGlobe() {
     if (!gpu) return;
 
     gpu.controls().autoRotate = false;
-    if (!airplaneMeshRef.current) airplaneMeshRef.current = createAirliner();
-    const plane = airplaneMeshRef.current;
-    plane.name = "mosquito-airplane";
-    gpu.scene().add(plane);
     const maxTrailPoints = FLIGHT_TRAIL_SEGMENTS + 1;
     const trailPositions = new Float32Array(maxTrailPoints * 3);
     const trailDistances = new Float32Array(maxTrailPoints);
@@ -422,33 +439,14 @@ export default function OutbreakGlobe() {
     const viewAspect = Math.min(windowWidth / Math.max(1, windowHeight), 1);
     const cruiseAltitude = Math.sqrt(1 + (1 / (0.6 * Math.tan(25 * Math.PI / 180) * viewAspect)) ** 2) - 1;
     const smooth = smoothFlightStep;
-    const previousPoint = new THREE.Vector3(), nextPoint = new THREE.Vector3();
-    const direction = new THREE.Vector3(), target = new THREE.Vector3();
-    const radialUp = new THREE.Vector3();
-    const beacon = plane.getObjectByName("beacon");
-    const attitude = new THREE.Quaternion();
-    let lastFrame = 0;
+    const world = new THREE.Vector3(), ground = new THREE.Vector3(), screen = new THREE.Vector3();
+    const globeRadius = gpu.getGlobeRadius();
     const animateFlight = (time: number) => {
       if (flightRef.current?.id !== nextFlight.id || !globeEl.current) return;
       const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
       const position = flightSample(nextFlight, t);
-      const currentPos = gpu.getCoords(position.lat, position.lng, position.altitude);
-      const ahead = flightRouteSample(nextFlight, Math.min(1, position.progress + 0.0001));
-      const behind = flightRouteSample(nextFlight, Math.max(0, position.progress - 0.0001));
-      const next = gpu.getCoords(ahead.lat, ahead.lng, ahead.altitude);
-      const previous = gpu.getCoords(behind.lat, behind.lng, behind.altitude);
-      nextPoint.set(next.x, next.y, next.z); previousPoint.set(previous.x, previous.y, previous.z);
-      plane.position.copy(currentPos);
-      radialUp.copy(plane.position).normalize(); plane.up.copy(radialUp);
-      direction.subVectors(nextPoint, previousPoint).normalize();
-      // Tangent includes the altitude gradient: nose rises on climb and lowers on approach.
-      target.copy(plane.position).add(direction);
-      plane.lookAt(target); plane.rotateY(Math.PI);
-      // Follow the climb/descent tangent with level wings and no sideways roll.
-      if (!lastFrame) attitude.copy(plane.quaternion);
-      else attitude.slerp(plane.quaternion, 1 - Math.exp(-10 * Math.min((time - lastFrame) / 1000, 0.1)));
-      plane.quaternion.copy(attitude); lastFrame = time;
-      if (beacon) beacon.visible = (time % 1600) < 110 || (time % 1600 > 230 && time % 1600 < 310);
+      world.copy(gpu.getCoords(position.lat, position.lng, position.altitude));
+      ground.copy(gpu.getCoords(position.lat, position.lng, COUNTRY_ALTITUDE + 0.003));
       const trail = flightTrailSamples(nextFlight, position.progress);
       for (let i = 0; i < trail.length; i++) {
         const tail = trail[i];
@@ -465,22 +463,28 @@ export default function OutbreakGlobe() {
         : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.68) / 0.32);
       const cameraCentre = flightCameraSample(nextFlight, position.progress);
       gpu.pointOfView({ ...cameraCentre, altitude }, 0);
-      // Keep a readable model size without engulfing small countries on approach.
       const camera = gpu.camera() as THREE.PerspectiveCamera;
-      const viewHeight = Math.max(1, mapContainer.current?.clientHeight || windowHeight);
-      const span = 2 * camera.position.distanceTo(plane.position) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-      plane.scale.setScalar(span * (windowWidth < 600 ? 26 : 32) / viewHeight / 12.2);
-      const projected = plane.position.clone().project(gpu.camera());
+      camera.updateMatrixWorld();
+      const projected = screen.copy(world).project(camera);
       if (mapContainer.current) {
         const bounds = mapContainer.current.getBoundingClientRect();
+        const x = (projected.x + 1) / 2 * bounds.width, y = (1 - projected.y) / 2 * bounds.height;
+        const visible = t < 1 && Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1
+          && projected.z >= -1 && projected.z < 1 && !earthOccludes(camera.position, world, globeRadius);
+        const surfaceVisible = !earthOccludes(camera.position, ground, globeRadius);
+        ground.project(camera);
+        showAircraft(visible ? {
+          flight: nextFlight, point: position, x, y, view: new THREE.Matrix4().extractRotation(camera.matrixWorldInverse),
+          shadow: surfaceVisible ? [(ground.x + 1) / 2 * bounds.width, (1 - ground.y) / 2 * bounds.height] : null,
+        } : null);
         Object.assign(mapContainer.current.dataset, {
           flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
           flightFrom: originName, flightTo: name, flightPhase: position.phase, flightBank: position.bank.toFixed(4),
           flightAltitude: position.altitude.toFixed(6), trailPointCount: String(trail.length),
           flightLatitude: position.lat.toFixed(6), flightLongitude: position.lng.toFixed(6),
-          flightVisible: String(Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1 && projected.z < 1),
-          flightX: ((projected.x + 1) / 2 * bounds.width).toFixed(2),
-          flightY: ((1 - projected.y) / 2 * bounds.height).toFixed(2), altitude: altitude.toFixed(4),
+          flightPitch: position.pitch.toFixed(4), flightVisible: String(visible),
+          flightX: x.toFixed(2),
+          flightY: y.toFixed(2), altitude: altitude.toFixed(4),
         });
       }
       if (t < 1) animationFrameRef.current = requestAnimationFrame(animateFlight);
@@ -577,22 +581,7 @@ export default function OutbreakGlobe() {
       window.removeEventListener("resize", handleResize);
       document.documentElement.classList.remove("simulator-page");
       cancelFlight();
-      if (airplaneMeshRef.current) {
-        airplaneMeshRef.current.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh;
-            if (mesh.geometry) mesh.geometry.dispose();
-            if (mesh.material) {
-              if (Array.isArray(mesh.material)) {
-                mesh.material.forEach(m => m.dispose());
-              } else {
-                mesh.material.dispose();
-              }
-            }
-          }
-        });
-        airplaneMeshRef.current = null;
-      }
+      aircraftPainter.current = null;
     };
   }, []);
 
@@ -763,7 +752,7 @@ export default function OutbreakGlobe() {
   return (
     <div className="relative w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-[#0a0a0a] to-black m-0 p-0">
       
-      <div ref={mapContainer} id="globe-container" className="absolute top-0 left-0 cursor-move" style={{ width: mapWidth, height: mapHeight }}>
+      <div ref={mapContainer} id="globe-container" className="absolute top-0 left-0 isolate cursor-move" style={{ width: mapWidth, height: mapHeight }}>
         <WebGLBoundary fallback={
           <SoftwareGlobe
             countries={countries}
@@ -776,6 +765,7 @@ export default function OutbreakGlobe() {
             onReset={() => { departureRef.current = null; setActiveCountry(null); }}
             focus={softwareFocus}
             flight={flight}
+            onAircraftFrame={showAircraft}
             onFlightComplete={completeFlight}
             onViewChange={view => { softwareView.current = view; }}
           />
@@ -814,6 +804,7 @@ export default function OutbreakGlobe() {
           htmlElement={createHtmlElement}
         />
         </WebGLBoundary>
+        <div ref={aircraftShadow} hidden aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-2 w-5 rounded-[50%] bg-black blur-[2px]" />
         {globeReady && <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2" aria-label="Globe view controls">
           <button type="button" aria-label="Zoom in" onClick={() => changeGpuZoom(1 / 1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">+</button>
           <button type="button" aria-label="Zoom out" onClick={() => changeGpuZoom(1.3)} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-xl">−</button>
@@ -823,6 +814,9 @@ export default function OutbreakGlobe() {
           }} className="w-9 h-9 rounded-lg bg-black/70 border border-white/20 text-white text-lg">↺</button>
         </div>}
       </div>
+      <canvas ref={aircraftCanvas} data-testid="flight-aircraft" hidden aria-hidden="true"
+        width={AIRCRAFT_TILE * 2} height={AIRCRAFT_TILE * 2} style={{ width: AIRCRAFT_TILE, height: AIRCRAFT_TILE }}
+        className="pointer-events-none absolute left-0 top-0 z-[1200]" />
       {flight && <div data-testid="globe-flight" role="status" className="absolute top-44 sm:top-56 left-1/2 -translate-x-1/2 text-xs text-blue-100 bg-black/70 px-3 py-2 rounded-lg pointer-events-none z-30">
         <span>✈ {flight.originName} → {flight.countryName}</span>
         {queuedCountryName && <span className="block mt-1 text-blue-200/75">Next: {queuedCountryName}</span>}

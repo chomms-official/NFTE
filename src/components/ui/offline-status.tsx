@@ -88,19 +88,11 @@ export function OfflineStatus() {
     :waiting?'Offline update ready':status.error?'Offline setup incomplete':status.ready?'Offline ready'
       :`Saving offline${status.total?` ${Math.round((status.completed||0)/status.total*100)}%`:'…'}`;
   return <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[1100] max-w-[92vw] text-xs font-sans">
-    {open&&<section aria-label="Offline preparation" className="mb-2 w-80 max-w-[92vw] rounded-xl border border-white/20 bg-zinc-950/95 p-4 text-zinc-200 shadow-xl">
-      <h2 className="font-semibold text-white mb-2">Competition offline demo</h2>
-      <p>Before travelling, open this site on the device and browser you will present with. Wait for “Offline ready”, then turn off Wi-Fi and reload to rehearse.</p>
-      <p className="mt-2 text-zinc-400">Maps, flights, charts and saved country data work offline. External reference links need internet. Keep this browser’s site data.</p>
-      {!supported&&<p role="alert" className="mt-2 text-amber-300">Offline preparation needs a browser with service worker support and a secure HTTPS connection.</p>}
-      {status.error&&<p role="alert" className="mt-2 text-amber-300">{status.error}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
+    {open&&supported&&<section id="offline-actions" aria-label="Offline actions" className="mb-2 flex w-max max-w-[92vw] flex-wrap gap-2 rounded-xl border border-white/20 bg-zinc-950/95 p-2 text-zinc-200 shadow-xl">
         {waiting&&<button className="rounded bg-blue-700 px-3 py-2" onClick={update}>Apply update &amp; reload</button>}
         {(status.ready||status.demo)&&<button className="rounded bg-emerald-800 px-3 py-2" onClick={()=>void toggleDemo().catch(()=>setStatus(previous=>({...previous,error:'Could not start the saved demo.'})))}>{status.demo?'Exit offline demo':'Test saved demo'}</button>}
-        {supported&&<button className="rounded border border-white/20 px-3 py-2" onClick={()=>void retry()}>Check / retry</button>}
-      </div>
-      <p className="mt-2 text-zinc-400">You can also install MozzieMap from your browser’s “Install app” or “Add to Home Screen” menu.</p>
+        <button className="rounded border border-white/20 px-3 py-2" onClick={()=>void retry()}>Check / retry</button>
     </section>}
-    <button aria-expanded={open} onClick={()=>{setOpen(!open);void refresh();}} className={`rounded-full border px-3 py-1.5 shadow-lg bg-zinc-950/90 ${status.ready?'border-emerald-500/40 text-emerald-200':'border-white/25 text-zinc-200'}`}><span role="status">{label}</span></button>
+    <button disabled={!supported} aria-expanded={open&&supported} aria-controls={open&&supported?'offline-actions':undefined} title={status.error} onClick={()=>{setOpen(!open);void refresh();}} className={`rounded-full border px-3 py-1.5 shadow-lg bg-zinc-950/90 ${status.ready?'border-emerald-500/40 text-emerald-200':'border-white/25 text-zinc-200'}`}><span role="status">{label}</span></button>
   </div>;
 }
