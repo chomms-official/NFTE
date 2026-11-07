@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { geoGraticule10, geoPath } from "d3-geo";
 import type { Feature, Geometry } from "geojson";
 import { countryName, type CountryFeature } from "@/lib/simulator";
-import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe } from "@/lib/software-globe-projection";
-import { flightSample, flightRouteSample, interpolateFlightPosition, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe, projectElevatedPoint } from "@/lib/software-globe-projection";
+import { flightSample, flightRouteSample, flightCameraSample, flightTrailSamples, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 
 import { drawSoftwareAirliner } from "@/lib/airliner";
 
@@ -147,41 +147,50 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
       }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(123,190,255,0.38)"; ctx.lineWidth = 1; ctx.stroke();
+      // Airborne objects are outside the surface clip and use actual radial height.
+      canvas.dataset.trailPointCount = "0";
+      const elevated = (point: { lat: number; lng: number; altitude: number }) =>
+        projectElevatedPoint(projection, [point.lng, point.lat], point.altitude);
       const flight = config.current.flight;
       if (flight && flight.id !== cancelledFlightId && flight.id !== completedFlightId) {
         const progress = Math.max(0, Math.min(1, (performance.now() - flight.startedAt) / Math.max(1, flight.duration)));
         canvas.dataset.flightId = String(flight.id); canvas.dataset.flightProgress = progress.toFixed(4);
-        const route = Array.from({ length: 35 }, (_, i) => {
-          const point = flightSample(flight, Math.max(0, progress - 0.22) + Math.min(progress, 0.22) * i / 34);
-          return [point.lng, point.lat];
-        });
-        ctx.beginPath(); path({ type: "LineString", coordinates: route });
-        ctx.strokeStyle = "rgba(240,246,255,0.35)"; ctx.lineWidth = 1.2;
-        ctx.shadowColor = "#8bcbff"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
         const position = flightSample(flight, progress);
+        const route = flightTrailSamples(flight, position.progress);
+        canvas.dataset.trailPointCount = String(route.length);
+        canvas.dataset.flightAltitude = position.altitude.toFixed(6);
+        ctx.save(); ctx.beginPath();
+        let connected = false;
+        for (const point of route) {
+          const screen = elevated(point);
+          if (!screen) { connected = false; continue; }
+          if (connected) ctx.lineTo(...screen); else ctx.moveTo(...screen);
+          connected = true;
+        }
+        ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(240,246,255,0.86)"; ctx.lineWidth = 1.5;
+        ctx.stroke(); ctx.restore();
         const future = flightRouteSample(flight, Math.min(1, position.progress + 0.0001));
         const past = flightRouteSample(flight, Math.max(0, position.progress - 0.0001));
-        const projected = projection([position.lng, position.lat]);
-        const ahead = projection([future.lng, future.lat]);
-        const behind = projection([past.lng, past.lat]);
-        const planeVisible = Boolean(projected && ahead && behind && isVisibleOnGlobe(projection, [position.lng, position.lat]));
+        const projected = elevated(position);
+        const ahead = elevated(future);
+        const behind = elevated(past);
+        const planeVisible = Boolean(progress < 1 && projected && ahead && behind);
         canvas.dataset.flightVisible = String(planeVisible);
         if (projected && ahead && behind && planeVisible) {
           const angle = Math.atan2(ahead[1] - behind[1], ahead[0] - behind[0]) + Math.PI / 2;
-          const lift = (position.altitude - 0.009) * 280;
-          canvas.dataset.flightX = projected[0].toFixed(2); canvas.dataset.flightY = (projected[1] - lift).toFixed(2);
+          canvas.dataset.flightX = projected[0].toFixed(2); canvas.dataset.flightY = projected[1].toFixed(2);
           canvas.dataset.flightLatitude = position.lat.toFixed(6); canvas.dataset.flightLongitude = position.lng.toFixed(6);
           canvas.dataset.flightPhase = position.phase;
           canvas.dataset.flightBank = position.bank.toFixed(4);
-          ctx.save(); ctx.translate(projected[0], projected[1] - lift); ctx.rotate(angle);
+          ctx.save(); ctx.translate(...projected); ctx.rotate(angle);
           const size = width < 600 ? 0.42 : 0.50; ctx.scale(size,size);
           drawSoftwareAirliner(ctx, position.bank);
           ctx.restore();
         }
       }
-      ctx.restore();
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(123,190,255,0.38)"; ctx.lineWidth = 1; ctx.stroke();
     };
     const resize = () => {
       const bounds = canvas.getBoundingClientRect();
@@ -283,10 +292,10 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
         if (flight) {
           const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
           const position = flightSample(flight, t);
-          const cameraCentre = interpolateFlightPosition(flight.from, flight.to, position.progress);
+          const cameraCentre = flightCameraSample(flight, position.progress);
           rotation = [-cameraCentre.lng, -cameraCentre.lat, 0];
           const smooth = smoothFlightStep;
-          const cruise = Math.min(1.2, flightStartZoom);
+          const cruise = Math.min(0.9, flightStartZoom);
           zoom = t < 0.28 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t / 0.28)
             : cruise + (clampZoom(flight.zoom) - cruise) * smooth((t - 0.68) / 0.32);
           draw();

@@ -49,48 +49,41 @@ const unitVector = ({ lat, lng }: GlobeCoordinate) => [
   Math.cos(lat * radians) * Math.sin(lng * radians), Math.sin(lat * radians),
 ];
 
-/** A compact turn with zero offset, slope and curvature at both joins. */
-function turnEnvelope(progress: number, start: number, width: number) {
-  const u = (progress - start) / width;
-  if (u <= 0 || u >= 1) return { value: 0, slope: 0, curvature: 0 };
-  return {
-    value: 64 * u ** 3 * (1 - u) ** 3,
-    slope: 192 * u ** 2 * (1 - u) ** 2 * (1 - 2 * u) / width,
-    curvature: 384 * u * (1 - u) * (1 - 5 * u + 5 * u ** 2) / width ** 2,
-  };
-}
-
-/** Departure/arrival turns around a great-circle cruise, shared by plane and trail. */
+/** A parabolic arch above the sphere, with level wings throughout the flight. */
 export function flightRouteSample(flight: Pick<GlobeFlight, "from" | "to">, value: number) {
   const progress = clamp(Number.isFinite(value) ? value : 0, 0, 1);
   const from = coordinate(flight.from), to = coordinate(flight.to);
   const distance = geoDistance(pair(from), pair(to));
   const base = interpolateFlightPosition(from, to, progress);
-  const departure = turnEnvelope(progress, 0, 0.28);
-  const arrival = turnEnvelope(progress, 0.72, 0.28);
-  const amplitude = Math.min(0.045, distance * 0.035);
-  const offset = amplitude * (departure.value - arrival.value);
-  const slope = amplitude * (departure.slope - arrival.slope);
-  const curvature = amplitude * (departure.curvature - arrival.curvature);
-  let position = base, bank = 0;
-  if (distance > 1e-8 && offset !== 0) {
-    // The midpoint also defines a stable plane for an antipodal route.
-    const a = unitVector(from), b = unitVector(interpolateFlightPosition(from, to, 0.5));
-    const normal = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-    const length = Math.hypot(...normal), centre = unitVector(base);
-    const point = centre.map((component, i) => component * Math.cos(offset) + normal[i] / length * Math.sin(offset));
-    position = { lat: Math.atan2(point[2], Math.hypot(point[0], point[1])) / radians,
-      lng: longitude(Math.atan2(point[1], point[0]) / radians) };
-    // Signed steering rate on the sphere, rather than a decorative roll wave.
-    const forward = distance * Math.cos(offset);
-    const steering = (forward * curvature + distance * Math.sin(offset) * slope ** 2)
-      / (forward ** 2 + slope ** 2) + distance * Math.sin(offset);
-    bank = clamp(Math.atan(steering * 0.045), -25 * radians, 25 * radians);
-  }
-  // Short neighbouring legs keep a shallow climb instead of rising vertically.
-  const lift = Math.min(0.018, distance * 0.017);
-  const altitude = 0.009 + lift * smoothFlightStep(progress / 0.22) * (1 - smoothFlightStep((progress - 0.74) / 0.26));
-  return { ...position, progress, altitude, bank };
+  const lift = Math.min(0.38, distance * 0.32);
+  const altitude = 0.009 + lift * 4 * progress * (1 - progress);
+  return { ...base, progress, altitude, bank: 0 };
+}
+
+export const FLIGHT_TRAIL_SEGMENTS = 128;
+
+/** Fixed route samples keep the dashes anchored as the flown path grows. */
+export function flightTrailSamples(flight: Pick<GlobeFlight, "from" | "to">, progress: number) {
+  if (!Number.isFinite(progress) || progress <= 0 || progress >= 1) return [];
+  const count = Math.ceil(progress * FLIGHT_TRAIL_SEGMENTS);
+  return Array.from({ length: count + 1 }, (_, i) =>
+    flightRouteSample(flight, Math.min(i / FLIGHT_TRAIL_SEGMENTS, progress)));
+}
+
+/** Look obliquely at the route so its height is visible, then return to the country. */
+export function flightCameraSample(flight: Pick<GlobeFlight, "from" | "to">, progress: number) {
+  const p = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
+  const reveal = smoothFlightStep(p / 0.22) * (1 - smoothFlightStep((p - 0.78) / 0.22));
+  const base = interpolateFlightPosition(flight.from, flight.to, p + (0.5 - p) * reveal);
+  const a = unitVector(coordinate(flight.from));
+  const b = unitVector(interpolateFlightPosition(flight.from, flight.to, 0.5));
+  const normal = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const length = Math.hypot(...normal);
+  if (length < 1e-8 || reveal === 0) return base;
+  const angle = 55 * radians * reveal * (normal[2] >= 0 ? -1 : 1);
+  const point = unitVector(base).map((component, i) => component * Math.cos(angle) + normal[i] / length * Math.sin(angle));
+  return { lat: Math.atan2(point[2], Math.hypot(point[0], point[1])) / radians,
+    lng: longitude(Math.atan2(point[1], point[0]) / radians) };
 }
 
 /** Great-circle routing takes the short path across the date line. */
@@ -118,7 +111,7 @@ export function interpolateFlightPosition(from: GlobeCoordinate, to: GlobeCoordi
   return { lat, lng: longitude(lng) };
 }
 
-/** Heading in degrees clockwise from geographic north, including terminal turns. */
+/** Heading in degrees clockwise from geographic north along the route. */
 export function flightBearing(from: GlobeCoordinate, to: GlobeCoordinate, progress = 0): number {
   const t = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
   const a = flightRouteSample({ from, to }, Math.max(0, t - 0.000001));

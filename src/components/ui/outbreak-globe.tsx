@@ -10,7 +10,7 @@ import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
 import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
 
-import { countryFraming, flightDuration, flightSample, flightRouteSample, interpolateFlightPosition, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { countryFraming, flightDuration, flightSample, flightRouteSample, flightCameraSample, flightTrailSamples, FLIGHT_TRAIL_SEGMENTS, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 import { createAutopilotStops } from "@/lib/autopilot-stops";
 import { prepareCountryGeometry, COUNTRY_CAP_RESOLUTION, COUNTRY_ALTITUDE } from "@/lib/country-geometry";
 
@@ -317,7 +317,12 @@ export default function OutbreakGlobe() {
     queuedCountryRef.current = null;
     setQueuedCountryName(null);
     setFlight(null);
-    if (mapContainer.current) mapContainer.current.dataset.flightVisible = "false";
+    if (mapContainer.current) {
+      mapContainer.current.dataset.flightVisible = "false";
+      mapContainer.current.dataset.trailPointCount = "0";
+      delete mapContainer.current.dataset.flightId;
+      delete mapContainer.current.dataset.flightProgress;
+    }
     airplaneMeshRef.current?.removeFromParent();
     if (trailLineRef.current) {
       trailLineRef.current.removeFromParent();
@@ -401,17 +406,21 @@ export default function OutbreakGlobe() {
     const plane = airplaneMeshRef.current;
     plane.name = "mosquito-airplane";
     gpu.scene().add(plane);
-    const maxTrailPoints = 35;
+    const maxTrailPoints = FLIGHT_TRAIL_SEGMENTS + 1;
     const trailPositions = new Float32Array(maxTrailPoints * 3);
+    const trailDistances = new Float32Array(maxTrailPoints);
     const trailGeo = new THREE.BufferGeometry();
     trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-    const trailMat = new THREE.LineBasicMaterial({ color: 0xddeeff, transparent: true, opacity: 0.35 });
+    trailGeo.setAttribute("lineDistance", new THREE.BufferAttribute(trailDistances, 1));
+    trailGeo.setDrawRange(0, 0);
+    const trailMat = new THREE.LineDashedMaterial({ color: 0xeef6ff, transparent: true, opacity: 0.86, dashSize: 2, gapSize: 1.6 });
     const trailLine = new THREE.Line(trailGeo, trailMat);
     // Positions move around the entire sphere; avoid stale culling bounds.
     trailLine.frustumCulled = false;
     gpu.scene().add(trailLine); trailLineRef.current = trailLine;
     const startAltitude = Math.max(0.12, current.altitude);
-    const cruiseAltitude = Math.max(1.4, Math.min(2.2, startAltitude));
+    const viewAspect = Math.min(windowWidth / Math.max(1, windowHeight), 1);
+    const cruiseAltitude = Math.sqrt(1 + (1 / (0.6 * Math.tan(25 * Math.PI / 180) * viewAspect)) ** 2) - 1;
     const smooth = smoothFlightStep;
     const previousPoint = new THREE.Vector3(), nextPoint = new THREE.Vector3();
     const direction = new THREE.Vector3(), target = new THREE.Vector3();
@@ -435,23 +444,26 @@ export default function OutbreakGlobe() {
       // Tangent includes the altitude gradient: nose rises on climb and lowers on approach.
       target.copy(plane.position).add(direction);
       plane.lookAt(target); plane.rotateY(Math.PI);
-      plane.rotateZ(position.bank);
-      // Bank into the actual terminal turn, then smoothly level the wings in cruise.
+      // Follow the climb/descent tangent with level wings and no sideways roll.
       if (!lastFrame) attitude.copy(plane.quaternion);
       else attitude.slerp(plane.quaternion, 1 - Math.exp(-10 * Math.min((time - lastFrame) / 1000, 0.1)));
       plane.quaternion.copy(attitude); lastFrame = time;
       if (beacon) beacon.visible = (time % 1600) < 110 || (time % 1600 > 230 && time % 1600 < 310);
-      for (let i = 0; i < maxTrailPoints; i++) {
-        const tailT = Math.max(0, t - 0.10 * i / (maxTrailPoints - 1));
-        const tail = flightSample(nextFlight, tailT);
+      const trail = flightTrailSamples(nextFlight, position.progress);
+      for (let i = 0; i < trail.length; i++) {
+        const tail = trail[i];
         const point = gpu.getCoords(tail.lat, tail.lng, tail.altitude);
         trailPositions.set([point.x, point.y, point.z], i * 3);
+        trailDistances[i] = i === 0 ? 0 : trailDistances[i - 1] + Math.hypot(
+          point.x - trailPositions[(i - 1) * 3], point.y - trailPositions[(i - 1) * 3 + 1], point.z - trailPositions[(i - 1) * 3 + 2]);
       }
+      trailGeo.setDrawRange(0, trail.length);
       trailGeo.attributes.position.needsUpdate = true;
-      // Track the cruise line so the terminal curve remains visible on the globe.
+      trailGeo.attributes.lineDistance.needsUpdate = true;
+      // The oblique overview reveals the arch while leaving room above the horizon.
       const altitude = t < 0.28 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t / 0.28)
         : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.68) / 0.32);
-      const cameraCentre = interpolateFlightPosition(nextFlight.from, nextFlight.to, position.progress);
+      const cameraCentre = flightCameraSample(nextFlight, position.progress);
       gpu.pointOfView({ ...cameraCentre, altitude }, 0);
       // Keep a readable model size without engulfing small countries on approach.
       const camera = gpu.camera() as THREE.PerspectiveCamera;
@@ -464,6 +476,7 @@ export default function OutbreakGlobe() {
         Object.assign(mapContainer.current.dataset, {
           flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
           flightFrom: originName, flightTo: name, flightPhase: position.phase, flightBank: position.bank.toFixed(4),
+          flightAltitude: position.altitude.toFixed(6), trailPointCount: String(trail.length),
           flightLatitude: position.lat.toFixed(6), flightLongitude: position.lng.toFixed(6),
           flightVisible: String(Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1 && projected.z < 1),
           flightX: ((projected.x + 1) / 2 * bounds.width).toFixed(2),

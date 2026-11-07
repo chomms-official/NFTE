@@ -67,3 +67,17 @@ test('country holes keep Lesotho distinct from surrounding South Africa on the g
   assert.equal(name(countryAtGlobePoint(projection, countries, projection(lesothoPoint))), 'Lesotho');
   assert.equal(name(countryAtGlobePoint(projection, countries, projection(southAfricaPoint))), 'South Africa');
 });
+
+test('airborne points project radially above the globe, scale with zoom and respect earth occlusion', async () => {
+  const {createGlobeProjection,projectElevatedPoint}=await helpers;
+  const projection=createGlobeProjection([0,0,0]).translate([500,400]).scale(200);
+  const surface=projectElevatedPoint(projection,[60,0],0);
+  const raised=projectElevatedPoint(projection,[60,0],.38);
+  assert.ok(raised[0]>700,'the arch can extend beyond the globe outline');
+  assert.ok(Math.abs((raised[0]-500)/(surface[0]-500)-1.38)<1e-12);
+  assert.equal(projectElevatedPoint(projection,[180,0],.38),null,'earth hides the rear path');
+  assert.ok(projectElevatedPoint(projection,[100,0],.38),'high points past the limb remain visible');
+  projection.scale(400);
+  const zoomed=projectElevatedPoint(projection,[60,0],.38);
+  assert.ok(Math.abs((zoomed[0]-500)/(raised[0]-500)-2)<1e-12);
+});
