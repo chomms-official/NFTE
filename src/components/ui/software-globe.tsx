@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { geoGraticule10, geoPath } from "d3-geo";
 import type { Feature, Geometry } from "geojson";
 import { countryName, type CountryFeature } from "@/lib/simulator";
-import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe, projectElevatedPoint } from "@/lib/software-globe-projection";
-import { flightSample, flightCameraSample, flightTrailSamples, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { asGeoFeature, createGlobeProjection, countryAtGlobePoint, isVisibleOnGlobe, projectElevatedPoint, prepareCountryOutline, traceCountryOutline } from "@/lib/software-globe-projection";
+import { flightSample, flightCameraSample, flightTrailAnchors, flightTrailSamples, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 
 import { orthographicAircraftView, type AircraftFrame } from "@/lib/flight-aircraft";
 import { COUNTRY_ALTITUDE } from "@/lib/country-geometry";
@@ -32,6 +32,7 @@ export type SoftwareGlobeProps = {
 /** A real spherical projection rendered on the CPU when WebGL is unavailable. */
 export function SoftwareGlobe(props: SoftwareGlobeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const trailRef = useRef<HTMLCanvasElement>(null);
   const config = useRef(props);
   const engine = useRef<{ draw: () => void; rotate: (x: number, y: number) => void; zoom: (factor: number) => void; reset: () => void; update: (previous: SoftwareGlobeProps) => void } | null>(null);
   const [hoveredName, setHoveredName] = useState("");
@@ -47,6 +48,11 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
     const context = canvas?.getContext("2d", { alpha: false });
     if (!canvas || !context) return;
     const ctx = context;
+    const trailCanvas = trailRef.current;
+    const transparentTrail = trailCanvas?.getContext("2d");
+    const trailContext = transparentTrail ?? ctx;
+    let trailFlight: GlobeFlight | null = null;
+    let anchors: ReturnType<typeof flightTrailAnchors> = [];
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     const projection = createGlobeProjection();
     const path = geoPath(projection, ctx);
@@ -65,9 +71,14 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
     let interacting = false, visible = !document.hidden, frame = 0, lastTime = 0, announcedReady = false;
 
     const geometries = new WeakMap<CountryFeature, Feature<Geometry>>();
+    const outlines = new WeakMap<CountryFeature["geometry"], ReturnType<typeof prepareCountryOutline>>();
     const geometryFor = (feature: CountryFeature) => {
       let geometry = geometries.get(feature);
-      if (!geometry) { geometry = asGeoFeature(feature); geometries.set(feature, geometry); }
+      if (!geometry) {
+        geometry = asGeoFeature(feature);
+        geometries.set(feature, geometry);
+        if (!outlines.has(feature.geometry)) outlines.set(feature.geometry, prepareCountryOutline(geometry));
+      }
       return geometry;
     };
     const layout = () => {
@@ -78,8 +89,13 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       centerX = left + availableWidth / 2; centerY = top + availableHeight / 2;
       radius = Math.max(1, Math.min(availableWidth * 0.43, availableHeight * 0.35));
     };
+    let viewLng = NaN, viewLat = NaN, viewScale = NaN, viewX = NaN, viewY = NaN;
     const setRotation = () => {
-      layout(); projection.rotate(rotation).scale(radius * zoom).translate([centerX, centerY]);
+      layout();
+      const scale = radius * zoom;
+      if (rotation[0] === viewLng && rotation[1] === viewLat && scale === viewScale && centerX === viewX && centerY === viewY) return;
+      [viewLng, viewLat, viewScale, viewX, viewY] = [rotation[0], rotation[1], scale, centerX, centerY];
+      projection.rotate(rotation).scale(scale).translate([centerX, centerY]);
       canvas.dataset.zoom = zoom.toFixed(3);
       canvas.dataset.latitude = (-rotation[1]).toFixed(4);
       canvas.dataset.longitude = (-rotation[0]).toFixed(4);
@@ -96,9 +112,7 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       const bounds = canvas.getBoundingClientRect();
       return [event.clientX - bounds.left, event.clientY - bounds.top] as const;
     };
-    const draw = () => {
-      if (!width || !height) return;
-      setRotation();
+    const drawSurface = () => {
       const cx = centerX, cy = centerY, r = radius * zoom;
       canvas.dataset.centerX = cx.toFixed(2); canvas.dataset.centerY = cy.toFixed(2);
       const sky = ctx.createRadialGradient(cx, cy, Math.min(r * 0.5, Math.max(width, height) * 0.35), cx, cy, Math.max(width, height));
@@ -123,8 +137,14 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       ctx.fillStyle = ocean; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
       ctx.strokeStyle = "rgba(125,174,220,0.1)"; ctx.lineWidth = 0.6;
       ctx.beginPath(); path(graticule); ctx.stroke();
+      const flightView = config.current.flight ? orthographicAircraftView(-rotation[1], -rotation[0]).elements : null;
       for (const country of config.current.countries) {
-        ctx.beginPath(); path(geometryFor(country));
+        const feature = geometryFor(country);
+        ctx.beginPath();
+        const outline = flightView
+          ? traceCountryOutline(ctx, outlines.get(country.geometry) ?? null, flightView, cx, cy, r) : "clip";
+        if (outline === "hidden") continue;
+        if (outline === "clip") path(feature);
         ctx.globalAlpha = country === hovered ? 1 : 0.87;
         ctx.fillStyle = country === hovered ? "#fff1c1" : config.current.getPolygonColor(country);
         ctx.fill();
@@ -152,28 +172,54 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       ctx.restore();
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(123,190,255,0.38)"; ctx.lineWidth = 1; ctx.stroke();
+    };
+
+    let paintedLng = NaN, paintedLat = NaN, paintedScale = 0, surfaceDirty = true;
+    const draw = (time = performance.now(), forceSurface = true, sample?: ReturnType<typeof flightSample>) => {
+      if (!width || !height) return;
+      if (forceSurface) surfaceDirty = true;
+      if (activeFlight() && !sample) {
+        // Resize, hover and prop changes invalidate the surface; only the next
+        // display tick moves the camera, trail and plane.
+        kick();
+        return;
+      }
+      setRotation();
+      // Only reuse geography while the accumulated projection error is subpixel.
+      // UI changes and resizes always repaint; the aircraft moves on every frame.
+      const displacement = Math.abs(viewScale - paintedScale) + viewScale * Math.PI / 180
+        * (Math.abs(viewLat - paintedLat) + Math.abs(viewLng - paintedLng));
+      if (surfaceDirty || !transparentTrail || !(displacement < 0.4)) {
+        drawSurface();
+        surfaceDirty = false;
+        paintedLng = viewLng; paintedLat = viewLat; paintedScale = viewScale;
+      }
       // Airborne objects are outside the surface clip and use actual radial height.
-      canvas.dataset.trailPointCount = "0";
+      if (transparentTrail && trailFlight) transparentTrail.clearRect(0, 0, width, height);
       const elevated = (point: { lat: number; lng: number; altitude: number }) =>
         projectElevatedPoint(projection, [point.lng, point.lat], point.altitude);
       const flight = config.current.flight;
       if (flight && flight.id !== cancelledFlightId && flight.id !== completedFlightId) {
-        const progress = Math.max(0, Math.min(1, (performance.now() - flight.startedAt) / Math.max(1, flight.duration)));
+        const progress = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
         canvas.dataset.flightId = String(flight.id); canvas.dataset.flightProgress = progress.toFixed(4);
-        const position = flightSample(flight, progress);
-        const route = flightTrailSamples(flight, position.progress);
+        const position = sample ?? flightSample(flight, progress);
+        if (trailFlight !== flight) {
+          trailFlight = flight;
+          anchors = flightTrailAnchors(flight);
+        }
+        const route = flightTrailSamples(flight, position.progress, anchors, position);
         canvas.dataset.trailPointCount = String(route.length);
         canvas.dataset.flightAltitude = position.altitude.toFixed(6);
-        ctx.save(); ctx.beginPath();
+        trailContext.save(); trailContext.beginPath();
         let connected = false;
         for (const point of route) {
           const screen = elevated(point);
           if (!screen) { connected = false; continue; }
-          if (connected) ctx.lineTo(...screen); else ctx.moveTo(...screen);
+          if (connected) trailContext.lineTo(...screen); else trailContext.moveTo(...screen);
           connected = true;
         }
-        ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(240,246,255,0.86)"; ctx.lineWidth = 1.5;
-        ctx.stroke(); ctx.restore();
+        trailContext.setLineDash([5, 5]); trailContext.strokeStyle = "rgba(240,246,255,0.86)"; trailContext.lineWidth = 1.5;
+        trailContext.stroke(); trailContext.restore();
         const projected = elevated(position);
         const planeVisible = progress < 1 && !!projected
           && projected[0] >= 0 && projected[0] <= width && projected[1] >= 0 && projected[1] <= height;
@@ -189,6 +235,10 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
             shadow: projectElevatedPoint(projection, [position.lng, position.lat], COUNTRY_ALTITUDE + 0.003),
           });
         } else config.current.onAircraftFrame?.(null);
+      } else {
+        trailFlight = null;
+        anchors.length = 0;
+        canvas.dataset.trailPointCount = "0";
       }
     };
     const resize = () => {
@@ -197,6 +247,10 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       const dpr = Math.min(devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(width * dpr)); canvas.height = Math.max(1, Math.round(height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (trailCanvas && transparentTrail) {
+        trailCanvas.width = canvas.width; trailCanvas.height = canvas.height;
+        transparentTrail.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
       draw();
       if (width && height && !announcedReady) {
         announcedReady = true; canvas.dataset.ready = "true"; config.current.onReady?.(true);
@@ -284,26 +338,26 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       frame = 0;
       if (!shouldAnimate()) { lastTime = 0; return; }
       const elapsed = time - (lastTime || time);
-      // Software rendering is capped around 30fps to avoid saturating mobile CPUs.
-      if (!lastTime || elapsed >= 32) {
-        const delta = Math.min(elapsed, 80);
-        const flight = activeFlight();
-        if (flight) {
-          const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
-          const position = flightSample(flight, t);
-          const cameraCentre = flightCameraSample(flight, position.progress);
-          rotation = [-cameraCentre.lng, -cameraCentre.lat, 0];
-          const smooth = smoothFlightStep;
-          const cruise = Math.min(0.9, flightStartZoom);
-          zoom = t < 0.28 ? flightStartZoom + (cruise - flightStartZoom) * smooth(t / 0.28)
-            : cruise + (clampZoom(flight.zoom) - cruise) * smooth((t - 0.68) / 0.32);
-          draw();
-          if (t >= 1) {
-            completedFlightId = flight.id; delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false";
-            config.current.onFlightComplete?.(flight.id);
-          }
-        } else { rotation[0] = (rotation[0] + delta * 0.002) % 360; draw(); }
+      const flight = activeFlight();
+      if (flight) {
+        const t = Math.max(0, Math.min(1, (time - flight.startedAt) / Math.max(1, flight.duration)));
+        const position = flightSample(flight, t);
+        const cameraCentre = flightCameraSample(flight, position.progress);
+        rotation = [-cameraCentre.lng, -cameraCentre.lat, 0];
+        const cruise = Math.min(0.9, flightStartZoom);
+        zoom = t < 0.28 ? flightStartZoom + (cruise - flightStartZoom) * smoothFlightStep(t / 0.28)
+          : cruise + (clampZoom(flight.zoom) - cruise) * smoothFlightStep((t - 0.68) / 0.32);
+        draw(time, false, position);
         lastTime = time;
+        if (t >= 1) {
+          completedFlightId = flight.id;
+          delete canvas.dataset.flightId; delete canvas.dataset.flightProgress; canvas.dataset.flightVisible = "false";
+          config.current.onFlightComplete?.(flight.id);
+        }
+      } else if (!lastTime || elapsed >= 32) {
+        // Ambient rotation can keep its lower rate when there is no aircraft.
+        rotation[0] = (rotation[0] + Math.min(elapsed, 80) * 0.002) % 360;
+        draw(time); lastTime = time;
       }
       kick();
     };
@@ -353,6 +407,7 @@ export function SoftwareGlobe(props: SoftwareGlobeProps) {
       <canvas ref={canvasRef} data-testid="software-globe" data-renderer="software-globe" className="w-full h-full block outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-inset"
         style={{ touchAction: "none", cursor: "grab" }} tabIndex={0}
         role="application" aria-label="Interactive mosquito risk globe. Drag or use arrow keys to rotate, plus and minus to zoom, Enter to select the centre country." />
+      <canvas ref={trailRef} aria-hidden="true" className="absolute inset-0 block h-full w-full pointer-events-none" />
       <div className="absolute left-1/2 -translate-x-1/2 top-[72%] pointer-events-none text-center text-xs text-zinc-200 drop-shadow-md" aria-live="polite">
         {hoveredName || "Drag to rotate · Click a country"}
       </div>

@@ -81,3 +81,30 @@ test('airborne points project radially above the globe, scale with zoom and resp
   const zoomed=projectElevatedPoint(projection,[60,0],.38);
   assert.ok(Math.abs((zoomed[0]-500)/(raised[0]-500)-2)<1e-12);
 });
+
+test('cached outlines preserve the projected vertices and holes and never cull visible land', async () => {
+  const {geoPath}=await import('d3-geo');
+  const {prepareCountryOutline,traceCountryOutline,createGlobeProjection,asGeoFeature}=await helpers;
+  const outlines=countries.map(c=>prepareCountryOutline(asGeoFeature(c)));
+  let hidden=0,drawn=0,clipped=0;
+  for(const [lat,lng] of [[0,0],[20,100],[70,-90],[-32,25],[68,-40],[-85,179]]){
+    const projection=createGlobeProjection([-lng,-lat,0]).scale(300).translate([400,350]);
+    const path=geoPath(projection),a=lat*Math.PI/180,b=lng*Math.PI/180;
+    const view=[Math.cos(b),-Math.sin(a)*Math.sin(b),Math.cos(a)*Math.sin(b),0,0,Math.cos(a),Math.sin(a),0,
+      -Math.sin(b),-Math.sin(a)*Math.cos(b),Math.cos(a)*Math.cos(b),0,0,0,0,1];
+    for(let i=0;i<countries.length;i++){
+      const c=countries[i],feature=asGeoFeature(c),points=new Set();let rings=0;
+      const key=(x,y)=>x.toFixed(6)+','+y.toFixed(6);
+      const plot=(x,y)=>points.add(key(x,y));
+      const result=traceCountryOutline({moveTo:plot,lineTo:plot,closePath:()=>rings++},outlines[i],view,400,350,300);
+      if(result==='hidden'){hidden++;assert.equal(path(feature),null,c.properties.ADMIN);continue;}
+      if(result==='clip'){clipped++;continue;}
+      drawn++;
+      const geometry=feature.geometry;
+      const allRings=geometry.type==='Polygon'?geometry.coordinates:geometry.coordinates.flat();
+      assert.equal(rings,allRings.length,c.properties.ADMIN);
+      for(const ring of allRings)for(const ll of ring.slice(0,-1))assert.ok(points.has(key(...projection(ll))),c.properties.ADMIN);
+    }
+  }
+  assert.ok(drawn>100&&hidden>100&&clipped>100);
+});

@@ -276,3 +276,27 @@ test('takeoff and arrival fade above land with level noses and a bounded pitch',
     }
   }
 });
+
+test('the incremental GPU line matches the full dashed path across partial, skipped and reversed frames', () => {
+  const route={from:{lat:33,lng:170},to:{lat:46,lng:-150}};
+  let projections=0;
+  const project=p=>({x:p.lat,y:p.lng,z:p.altitude});
+  const line=helpers.createFlightTrailBuffer(route,p=>{projections++;return project(p);});
+  const anchors=helpers.flightTrailAnchors(route);
+  for(const progress of [.002,.003,.20,.5,.501,.493,.499,.75,.999,1,0]){
+    const tip=helpers.flightRouteSample(route,progress);
+    const before=projections;
+    const {count,firstChanged}=line.advance(progress,project(tip));
+    const full=helpers.flightTrailSamples(route,progress);
+    assert.deepEqual(helpers.flightTrailSamples(route,progress,anchors,tip),full);
+    assert.equal(count,full.length);
+    if(progress===.003){assert.equal(projections,before);assert.equal(firstChanged,1);}
+    let length=0;
+    full.forEach((p,i)=>{
+      const expected=[p.lat,p.lng,p.altitude];
+      expected.forEach((n,j)=>assert.ok(Math.abs(line.positions[i*3+j]-n)<1e-5));
+      if(i){const prev=full[i-1];length+=Math.hypot(p.lat-prev.lat,p.lng-prev.lng,p.altitude-prev.altitude);}
+      assert.ok(Math.abs(length-line.distances[i])<3e-4);
+    });
+  }
+});

@@ -69,19 +69,60 @@ export function flightRouteSample(flight: Pick<GlobeFlight, "from" | "to">, valu
 
 export const FLIGHT_TRAIL_SEGMENTS = 128;
 
-/** Fixed route samples keep the dashes anchored as the flown path grows. */
-export function flightTrailSamples(flight: Pick<GlobeFlight, "from" | "to">, progress: number) {
-  if (!Number.isFinite(progress) || progress <= 0 || progress >= 1) return [];
-  const count = Math.ceil(progress * FLIGHT_TRAIL_SEGMENTS);
-  return Array.from({ length: count + 1 }, (_, i) =>
-    flightRouteSample(flight, Math.min(i / FLIGHT_TRAIL_SEGMENTS, progress)));
+type FlightRoute = Pick<GlobeFlight, "from" | "to">;
+type RoutePoint = ReturnType<typeof flightRouteSample>;
+
+/** The anchored part of the dashed trail is immutable for the life of a flight. */
+export function flightTrailAnchors(flight: FlightRoute) {
+  return Array.from({ length: FLIGHT_TRAIL_SEGMENTS + 1 }, (_, i) =>
+    flightRouteSample(flight, i / FLIGHT_TRAIL_SEGMENTS));
+}
+
+export function flightTrailPointCount(progress: number) {
+  if (!Number.isFinite(progress) || progress <= 0 || progress >= 1) return 0;
+  return Math.ceil(progress * FLIGHT_TRAIL_SEGMENTS) + 1;
+}
+
+export function flightTrailSamples(flight: FlightRoute, progress: number, anchors?: RoutePoint[], tip?: RoutePoint) {
+  const count = flightTrailPointCount(progress);
+  if (!count) return [];
+  const path = anchors ? anchors.slice(0, count - 1)
+    : Array.from({ length: count - 1 }, (_, i) => flightRouteSample(flight, i / FLIGHT_TRAIL_SEGMENTS));
+  path.push(tip ?? flightRouteSample(flight, progress));
+  return path;
+}
+
+/** A GPU line shares fixed anchors with the CPU trail. Only its growing end is uploaded. */
+export function createFlightTrailBuffer(flight: FlightRoute, project: (point: RoutePoint) => { x: number; y: number; z: number }) {
+  const anchors = flightTrailAnchors(flight);
+  const positions = new Float32Array(anchors.length * 3), distances = new Float32Array(anchors.length);
+  let lastAnchor = -1;
+  const write = (index: number, point: { x: number; y: number; z: number }) => {
+    const k = index * 3;
+    positions[k] = point.x; positions[k + 1] = point.y; positions[k + 2] = point.z;
+    distances[index] = index === 0 ? 0 : distances[index - 1] +
+      Math.hypot(point.x - positions[k - 3], point.y - positions[k - 2], point.z - positions[k - 1]);
+  };
+  return { positions, distances, advance(progress: number, tip: { x: number; y: number; z: number }) {
+    const count = flightTrailPointCount(progress);
+    if (!count) return { firstChanged: 0, count };
+    const fixedEnd = count - 2;
+    lastAnchor = Math.min(lastAnchor, fixedEnd);
+    const firstChanged = lastAnchor + 1;
+    while (lastAnchor < fixedEnd) {
+      lastAnchor++;
+      write(lastAnchor, project(anchors[lastAnchor]));
+    }
+    write(count - 1, tip);
+    return { firstChanged, count };
+  }};
 }
 
 /** Look obliquely at the route so its height is visible, then return to the country. */
 export function flightCameraSample(flight: Pick<GlobeFlight, "from" | "to">, progress: number) {
   const p = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
   const reveal = smoothFlightStep(p / 0.22) * (1 - smoothFlightStep((p - 0.78) / 0.22));
-  const base = interpolateFlightPosition(flight.from, flight.to, p + (0.5 - p) * reveal);
+  const base = interpolateFlightPosition(flight.from, flight.to, reveal === 1 ? 0.5 : p + (0.5 - p) * reveal);
   const a = unitVector(coordinate(flight.from));
   const b = unitVector(interpolateFlightPosition(flight.from, flight.to, 0.5));
   const normal = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

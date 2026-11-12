@@ -1,4 +1,4 @@
-import { Matrix3, Matrix4, Mesh, MeshPhongMaterial, Vector3 } from "three";
+import { Matrix3, Matrix4, Mesh, MeshPhongMaterial, Vector3, type Camera, type Scene } from "three";
 import { createAirliner } from "./airliner";
 import { FLIGHT_CLEARANCE, interpolateFlightPosition, type GlobeCoordinate, type GlobeFlight } from "./globe-navigation";
 
@@ -46,6 +46,21 @@ export function earthOccludes(eye: Vector3, point: Vector3, radius: number) {
   return ray.multiplyScalar(along).add(eye).lengthSq() < radius * radius;
 }
 
+/** Run before this globe camera is drawn, with the same view for the trail and DOM aircraft. */
+export function bindFlightToScene(scene: Scene, camera: Camera, advance: (time: number) => void) {
+  const previous = scene.onBeforeRender;
+  let active = true;
+  const beforeRender: typeof previous = function (...args) {
+    previous.apply(scene, args);
+    if (active && args[2] === camera) advance(performance.now());
+  };
+  scene.onBeforeRender = beforeRender;
+  return () => {
+    active = false;
+    if (scene.onBeforeRender === beforeRender) scene.onBeforeRender = previous;
+  };
+}
+
 export const AIRCRAFT_TILE = 64;
 const resolution = AIRCRAFT_TILE * 2;
 
@@ -88,7 +103,17 @@ export function createAircraftPainter() {
   const depth = new Float32Array(resolution * resolution);
   const light = new Vector3(-0.45, 0.65, 0.68).normalize();
   const half = light.clone().add(new Vector3(0, 0, 1)).normalize();
-  return { resolution, pixels, paint(view: Matrix4, lengthPx: number, time: number) {
+  let lastContext: CanvasRenderingContext2D | undefined;
+  const lastView = new Matrix4();
+  const rotationEntries = [0, 1, 2, 4, 5, 6, 8, 9, 10];
+  let lastLength = NaN, lastBeacon = false;
+  let image: ImageData | undefined;
+  const beaconOn = (time: number) => {
+    const flash = time % 1600;
+    return flash < 110 || (flash > 230 && flash < 310);
+  };
+  function paint(view: Matrix4, lengthPx: number, time: number) {
+    lastContext = undefined;
     pixels.fill(0); depth.fill(-Infinity);
     const e = view.elements, scale = lengthPx * 2 / 12.2;
     for (let i = 0, j = 0; i < vertices.length; i += 10, j += 6) {
@@ -102,8 +127,7 @@ export function createAircraftPainter() {
       const specular = vertices[i + 9] ? 0 : 42 * Math.max(0, vx*half.x + vy*half.y + vz*half.z) ** 22;
       for (let c = 0; c < 3; c++) projected[j + 3 + c] = vertices[i + 6 + c] * diffuse + specular;
     }
-    const flash = time % 1600;
-    const count = flash < 110 || (flash > 230 && flash < 310) ? faces.length : beaconStart;
+    const count = beaconOn(time) ? faces.length : beaconStart;
     for (let i = 0; i < count; i += 3) {
       const a = faces[i]*6, b = faces[i + 1]*6, c = faces[i + 2]*6;
       const ax = projected[a], ay = projected[a + 1], bx = projected[b], by = projected[b + 1], cx = projected[c], cy = projected[c + 1];
@@ -125,7 +149,24 @@ export function createAircraftPainter() {
         pixels[index*4+3] = 255;
       }
     }
-  }};
+  }
+
+  function drawTo(ctx: CanvasRenderingContext2D, view: Matrix4, lengthPx: number, time: number) {
+    // Bound the displacement of an aircraft vertex since the last raster.
+    // Screen position and opacity still update on every display frame.
+    const lit = beaconOn(time);
+    if (ctx === lastContext && lit === lastBeacon) {
+      let deltaSquared = 0;
+      for (const i of rotationEntries) deltaSquared += (view.elements[i] - lastView.elements[i]) ** 2;
+      const maxPixelShift = 0.55 * (lengthPx * Math.sqrt(deltaSquared / 2) + Math.abs(lengthPx - lastLength));
+      if (maxPixelShift < 0.3) return;
+    }
+    paint(view, lengthPx, time);
+    image ??= new ImageData(pixels, resolution, resolution);
+    ctx.putImageData(image, 0, 0);
+    lastContext = ctx; lastView.copy(view); lastLength = lengthPx; lastBeacon = lit;
+  }
+  return { resolution, pixels, paint, drawTo };
 }
 
 export function paintFlightFrame(canvas: HTMLCanvasElement, painter: ReturnType<typeof createAircraftPainter>,
@@ -134,8 +175,7 @@ export function paintFlightFrame(canvas: HTMLCanvasElement, painter: ReturnType<
   if (!ctx) return;
   const view = frame.view.clone().multiply(aircraftAttitude(frame.flight, frame.point));
   const rise = Math.max(0, Math.min(1, (frame.point.altitude - FLIGHT_CLEARANCE) / 0.38));
-  painter.paint(view, (mobile ? 32 : 38) + 8 * rise, performance.now());
-  ctx.putImageData(new ImageData(painter.pixels, painter.resolution, painter.resolution), 0, 0);
+  painter.drawTo(ctx, view, (mobile ? 32 : 38) + 8 * rise, performance.now());
   canvas.style.transform = `translate3d(${frame.x - AIRCRAFT_TILE / 2}px,${frame.y - AIRCRAFT_TILE / 2}px,0)`;
   canvas.style.opacity = String(frame.point.opacity);
   canvas.hidden = false;
