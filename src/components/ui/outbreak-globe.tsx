@@ -10,7 +10,7 @@ import { WebGLBoundary } from "./webgl-boundary";
 import { SoftwareGlobe } from "./software-globe";
 import { countryRisk, simulationSeed, scaleSimulatedHistory, type CountryFeature } from "@/lib/simulator";
 
-import { countryFraming, FLIGHT_CLEARANCE, flightDuration, flightSample, flightCameraSample, flightTrailSamples, FLIGHT_TRAIL_SEGMENTS, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
+import { countryFraming, FLIGHT_CLEARANCE, flightDuration, flightSample, flightCameraSample, createFlightTrailBuffer, smoothFlightStep, type GlobeFlight } from "@/lib/globe-navigation";
 import { createAutopilotStops } from "@/lib/autopilot-stops";
 import { prepareCountryGeometry, COUNTRY_CAP_RESOLUTION, COUNTRY_ALTITUDE } from "@/lib/country-geometry";
 
@@ -23,7 +23,7 @@ const Globe = dynamic(() => import("react-globe.gl"), {
   ),
 });
 
-import { AIRCRAFT_TILE, createAircraftPainter, earthOccludes, paintFlightFrame, type AircraftFrame } from "@/lib/flight-aircraft";
+import { AIRCRAFT_TILE, bindFlightToScene, createAircraftPainter, earthOccludes, paintFlightFrame, type AircraftFrame } from "@/lib/flight-aircraft";
 
 type MosquitoType = "aedes" | "anopheles" | "culex";
 
@@ -305,10 +305,21 @@ export default function OutbreakGlobe() {
   const aircraftShadow = useRef<HTMLDivElement>(null);
   const aircraftPainter = useRef<ReturnType<typeof createAircraftPainter> | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const detachFlightRender = useRef<(() => void) | null>(null);
   const tourStopsRef = useRef<ReturnType<typeof createAutopilotStops> | null>(null);
 
   const [windowHeight, setWindowHeight] = useState(800);
+
+  useEffect(() => {
+    if (!rendererReady || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const prepare = () => { aircraftPainter.current ??= createAircraftPainter(); };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(prepare, { timeout: 1200 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(prepare, 250);
+    return () => window.clearTimeout(timer);
+  }, [rendererReady]);
 
   const showAircraft = useCallback((frame: AircraftFrame | null) => {
     const canvas = aircraftCanvas.current, shadow = aircraftShadow.current;
@@ -331,8 +342,8 @@ export default function OutbreakGlobe() {
 
   const cancelFlight = useCallback(() => {
     tourStopsRef.current?.depart();
-    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
-    animationFrameRef.current = null;
+    detachFlightRender.current?.();
+    detachFlightRender.current = null;
     flightRef.current = null;
     destinationRef.current = null;
     queuedCountryRef.current = null;
@@ -423,12 +434,12 @@ export default function OutbreakGlobe() {
     if (!gpu) return;
 
     gpu.controls().autoRotate = false;
-    const maxTrailPoints = FLIGHT_TRAIL_SEGMENTS + 1;
-    const trailPositions = new Float32Array(maxTrailPoints * 3);
-    const trailDistances = new Float32Array(maxTrailPoints);
+    const trail = createFlightTrailBuffer(nextFlight, point => gpu.getCoords(point.lat, point.lng, point.altitude));
+    const positions = new THREE.BufferAttribute(trail.positions, 3).setUsage(THREE.DynamicDrawUsage);
+    const distances = new THREE.BufferAttribute(trail.distances, 1).setUsage(THREE.DynamicDrawUsage);
     const trailGeo = new THREE.BufferGeometry();
-    trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-    trailGeo.setAttribute("lineDistance", new THREE.BufferAttribute(trailDistances, 1));
+    trailGeo.setAttribute("position", positions);
+    trailGeo.setAttribute("lineDistance", distances);
     trailGeo.setDrawRange(0, 0);
     const trailMat = new THREE.LineDashedMaterial({ color: 0xeef6ff, transparent: true, opacity: 0.86, dashSize: 2, gapSize: 1.6 });
     const trailLine = new THREE.Line(trailGeo, trailMat);
@@ -441,33 +452,36 @@ export default function OutbreakGlobe() {
     const smooth = smoothFlightStep;
     const world = new THREE.Vector3(), ground = new THREE.Vector3(), screen = new THREE.Vector3();
     const globeRadius = gpu.getGlobeRadius();
+    const camera = gpu.camera() as THREE.PerspectiveCamera;
+    const renderer = gpu.renderer() as THREE.WebGLRenderer;
+    const viewport = new THREE.Vector2();
+    let lastLat = NaN, lastLng = NaN, lastAltitude = NaN;
     const animateFlight = (time: number) => {
       if (flightRef.current?.id !== nextFlight.id || !globeEl.current) return;
       const t = Math.max(0, Math.min(1, (time - nextFlight.startedAt) / nextFlight.duration));
       const position = flightSample(nextFlight, t);
       world.copy(gpu.getCoords(position.lat, position.lng, position.altitude));
       ground.copy(gpu.getCoords(position.lat, position.lng, COUNTRY_ALTITUDE + 0.003));
-      const trail = flightTrailSamples(nextFlight, position.progress);
-      for (let i = 0; i < trail.length; i++) {
-        const tail = trail[i];
-        const point = gpu.getCoords(tail.lat, tail.lng, tail.altitude);
-        trailPositions.set([point.x, point.y, point.z], i * 3);
-        trailDistances[i] = i === 0 ? 0 : trailDistances[i - 1] + Math.hypot(
-          point.x - trailPositions[(i - 1) * 3], point.y - trailPositions[(i - 1) * 3 + 1], point.z - trailPositions[(i - 1) * 3 + 2]);
+      const { firstChanged, count } = trail.advance(position.progress, world);
+      if (count) {
+        positions.addUpdateRange(firstChanged * 3, (count - firstChanged) * 3);
+        distances.addUpdateRange(firstChanged, count - firstChanged);
+        positions.needsUpdate = true; distances.needsUpdate = true;
       }
-      trailGeo.setDrawRange(0, trail.length);
-      trailGeo.attributes.position.needsUpdate = true;
-      trailGeo.attributes.lineDistance.needsUpdate = true;
+      trailGeo.setDrawRange(0, count);
       // The oblique overview reveals the arch while leaving room above the horizon.
       const altitude = t < 0.28 ? startAltitude + (cruiseAltitude - startAltitude) * smooth(t / 0.28)
         : cruiseAltitude + (framing.webglAltitude - cruiseAltitude) * smooth((t - 0.68) / 0.32);
       const cameraCentre = flightCameraSample(nextFlight, position.progress);
-      gpu.pointOfView({ ...cameraCentre, altitude }, 0);
-      const camera = gpu.camera() as THREE.PerspectiveCamera;
-      camera.updateMatrixWorld();
+      if (cameraCentre.lat !== lastLat || cameraCentre.lng !== lastLng || altitude !== lastAltitude) {
+        gpu.pointOfView({ ...cameraCentre, altitude }, 0);
+        camera.lookAt(gpu.controls().target);
+        camera.updateMatrixWorld();
+        lastLat = cameraCentre.lat; lastLng = cameraCentre.lng; lastAltitude = altitude;
+      }
       const projected = screen.copy(world).project(camera);
       if (mapContainer.current) {
-        const bounds = mapContainer.current.getBoundingClientRect();
+        const bounds = renderer.getSize(viewport);
         const x = (projected.x + 1) / 2 * bounds.width, y = (1 - projected.y) / 2 * bounds.height;
         const visible = t < 1 && Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1
           && projected.z >= -1 && projected.z < 1 && !earthOccludes(camera.position, world, globeRadius);
@@ -480,17 +494,16 @@ export default function OutbreakGlobe() {
         Object.assign(mapContainer.current.dataset, {
           flightId: String(nextFlight.id), flightProgress: t.toFixed(4),
           flightFrom: originName, flightTo: name, flightPhase: position.phase, flightBank: position.bank.toFixed(4),
-          flightAltitude: position.altitude.toFixed(6), trailPointCount: String(trail.length),
+          flightAltitude: position.altitude.toFixed(6), trailPointCount: String(count),
           flightLatitude: position.lat.toFixed(6), flightLongitude: position.lng.toFixed(6),
           flightPitch: position.pitch.toFixed(4), flightVisible: String(visible),
           flightX: x.toFixed(2),
           flightY: y.toFixed(2), altitude: altitude.toFixed(4),
         });
       }
-      if (t < 1) animationFrameRef.current = requestAnimationFrame(animateFlight);
-      else completeFlight(nextFlight.id);
+      if (t >= 1) completeFlight(nextFlight.id);
     };
-    animationFrameRef.current = requestAnimationFrame(animateFlight);
+    detachFlightRender.current = bindFlightToScene(gpu.scene(), camera, animateFlight);
   };
 
   const selectCountryRef = useRef(handleSelectCountry);
@@ -816,7 +829,7 @@ export default function OutbreakGlobe() {
       </div>
       <canvas ref={aircraftCanvas} data-testid="flight-aircraft" hidden aria-hidden="true"
         width={AIRCRAFT_TILE * 2} height={AIRCRAFT_TILE * 2} style={{ width: AIRCRAFT_TILE, height: AIRCRAFT_TILE }}
-        className="pointer-events-none absolute left-0 top-0 z-[1200]" />
+        className="pointer-events-none absolute left-0 top-0 z-[1200] will-change-transform" />
       {flight && <div data-testid="globe-flight" role="status" className="absolute top-44 sm:top-56 left-1/2 -translate-x-1/2 text-xs text-blue-100 bg-black/70 px-3 py-2 rounded-lg pointer-events-none z-30">
         <span>✈ {flight.originName} → {flight.countryName}</span>
         {queuedCountryName && <span className="block mt-1 text-blue-200/75">Next: {queuedCountryName}</span>}

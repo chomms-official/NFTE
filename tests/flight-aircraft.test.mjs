@@ -63,3 +63,37 @@ test('the offline 3D airframe has shaded silver surfaces, a red tail and visible
   const side=summarize(new Matrix4().makeRotationY(Math.PI/2));
   assert.ok(dorsal>side*1.5,'different views must foreshorten different parts of the 3D model');
 });
+
+test('the active globe render drives exactly one aircraft update for its own camera and detaches on cancellation', async () => {
+  const { bindFlightToScene } = await import(modules.get('./flight-aircraft'));
+  const { Scene } = await import('three');
+  const scene=new Scene(),camera=new PerspectiveCamera(),other=new PerspectiveCamera();
+  const calls=[];
+  const previous=function(){assert.equal(this,scene);calls.push('original')};
+  scene.onBeforeRender=previous;
+  const cancel=bindFlightToScene(scene,camera,time=>{assert.ok(Number.isFinite(time));calls.push('aircraft')});
+  scene.onBeforeRender(null,scene,camera,null);
+  scene.onBeforeRender(null,scene,other,null);
+  cancel();cancel();
+  assert.equal(scene.onBeforeRender,previous);
+  scene.onBeforeRender(null,scene,camera,null);
+  assert.deepEqual(calls,['original','aircraft','original','original']);
+});
+
+test('moving a shaded aircraft reuses its pixels until its angle, apparent size, beacon or target changes', () => {
+  const originalImageData=globalThis.ImageData;
+  try{
+    globalThis.ImageData=class {constructor(data){this.data=data;}};
+    const painter=createAircraftPainter(), view=new Matrix4(),uploads=[];
+    const ctx={putImageData:image=>uploads.push(image)};
+    painter.drawTo(ctx,view,38,500);
+    painter.drawTo(ctx,view.clone().makeRotationY(.001),38.01,580);
+    assert.equal(uploads.length,1,'subpixel motion does not upload another 128px tile');
+    painter.drawTo(ctx,view.clone().makeRotationY(.1),38,650);
+    painter.drawTo(ctx,view,45,760);
+    painter.drawTo(ctx,view,45,1601);
+    painter.drawTo({putImageData:ctx.putImageData},view,45,1605);
+    assert.equal(uploads.length,5);
+    assert.equal(new Set(uploads).size,1,'one ImageData buffer serves all paints');
+  }finally{if(originalImageData===undefined)delete globalThis.ImageData;else globalThis.ImageData=originalImageData;}
+});
